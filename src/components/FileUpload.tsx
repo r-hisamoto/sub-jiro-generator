@@ -44,10 +44,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         className="hidden"
         onChange={handleFileChange}
       />
-      <Button
-        variant="secondary"
-        onClick={() => fileInputRef.current?.click()}
-      >
+      <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
         ファイルを選択
       </Button>
     </div>

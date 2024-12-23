@@ -7,7 +7,7 @@ import Timeline from "@/components/Timeline";
 import SubtitleEditor from "@/components/SubtitleEditor";
 import { Subtitle, VideoFile } from "@/types/subtitle";
 import { downloadSRT } from "@/lib/subtitleUtils";
-import { Download } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 
 const Index = () => {
   const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
@@ -18,14 +18,13 @@ const Index = () => {
 
   const handleFileSelect = (file: VideoFile) => {
     setVideoFile(file);
-    // ここで音声認識APIを呼び出し、字幕を生成する処理を追加予定
-    // 現在はダミーデータを使用
+    // 音声認識APIとの連携は次のフェーズで実装予定
     setSubtitles([
       {
         id: "1",
         startTime: 1,
         endTime: 4,
-        text: "こんにちは、これはテスト用の字幕です。",
+        text: "字幕のテストです。",
       },
       {
         id: "2",
@@ -77,7 +76,7 @@ const Index = () => {
                 onTimeUpdate={setCurrentTime}
               />
               <Timeline
-                duration={100} // 動画の実際の長さを設定する必要があります
+                duration={100}
                 currentTime={currentTime}
                 subtitles={subtitles}
                 onTimeChange={setCurrentTime}

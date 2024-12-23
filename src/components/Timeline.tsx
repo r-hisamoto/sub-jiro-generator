@@ -1,6 +1,6 @@
 import { Subtitle } from "@/types/subtitle";
 import { formatTime } from "@/lib/subtitleUtils";
-import { useRef, useEffect } from "react";
+import { useRef } from "react";
 
 interface TimelineProps {
   duration: number;

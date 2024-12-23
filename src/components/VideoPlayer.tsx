@@ -8,7 +8,12 @@ interface VideoPlayerProps {
   onTimeUpdate: (time: number) => void;
 }
 
-const VideoPlayer = ({ videoUrl, currentTime, subtitles, onTimeUpdate }: VideoPlayerProps) => {
+const VideoPlayer = ({
+  videoUrl,
+  currentTime,
+  subtitles,
+  onTimeUpdate,
+}: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
