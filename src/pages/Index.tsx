@@ -7,6 +7,8 @@ import Timeline from "@/components/Timeline";
 import SubtitleEditor from "@/components/SubtitleEditor";
 import { Subtitle, VideoFile } from "@/types/subtitle";
 import { downloadSRT } from "@/lib/subtitleUtils";
+import { generateSubtitles } from "@/lib/subtitleGenerator";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { Download, Upload } from "lucide-react";
 
 const Index = () => {
@@ -14,25 +16,18 @@ const Index = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [selectedSubtitle, setSelectedSubtitle] = useState<Subtitle | null>(null);
+  const { transcribeAudio, isProcessing } = useSpeechRecognition();
   const { toast } = useToast();
 
-  const handleFileSelect = (file: VideoFile) => {
+  const handleFileSelect = async (file: VideoFile) => {
     setVideoFile(file);
-    // 音声認識APIとの連携は次のフェーズで実装予定
-    setSubtitles([
-      {
-        id: "1",
-        startTime: 1,
-        endTime: 4,
-        text: "字幕のテストです。",
-      },
-      {
-        id: "2",
-        startTime: 5,
-        endTime: 8,
-        text: "音声認識APIと連携することで、自動で字幕を生成できます。",
-      },
-    ]);
+    
+    // 音声認識処理
+    const transcription = await transcribeAudio(file.file);
+    if (transcription) {
+      const generatedSubtitles = generateSubtitles(transcription);
+      setSubtitles(generatedSubtitles);
+    }
   };
 
   const handleSubtitleUpdate = (updatedSubtitle: Subtitle) => {
