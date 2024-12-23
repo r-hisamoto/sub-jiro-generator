@@ -18,10 +18,10 @@ export const useSpeechRecognition = () => {
       // Convert audio file to ArrayBuffer
       const arrayBuffer = await audioFile.arrayBuffer();
       
-      // Convert ArrayBuffer to Float32Array
+      // Convert ArrayBuffer to Float32Array for audio processing
       const audioData = new Float32Array(arrayBuffer);
       
-      // Process audio data
+      // Process audio data with the transcriber
       const result = await transcriber(audioData);
       
       toast({
