@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { pipeline, AutomaticSpeechRecognitionOutput } from "@huggingface/transformers";
+import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useSpeechRecognition = () => {
@@ -18,7 +18,7 @@ export const useSpeechRecognition = () => {
       // Convert File to ArrayBuffer and then to Float32Array
       const arrayBuffer = await audioFile.arrayBuffer();
       const float32Array = new Float32Array(arrayBuffer);
-      const result = await transcriber([float32Array]);
+      const result = await transcriber(float32Array);
       
       toast({
         title: "音声認識完了",
