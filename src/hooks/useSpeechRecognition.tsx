@@ -15,10 +15,14 @@ export const useSpeechRecognition = () => {
         { device: "webgpu" }
       );
 
-      // Convert File to ArrayBuffer and then to Float32Array
+      // Convert audio file to ArrayBuffer
       const arrayBuffer = await audioFile.arrayBuffer();
-      const float32Array = new Float32Array(arrayBuffer);
-      const result = await transcriber(float32Array);
+      
+      // Convert ArrayBuffer to Float32Array
+      const audioData = new Float32Array(arrayBuffer);
+      
+      // Process audio data
+      const result = await transcriber(audioData);
       
       toast({
         title: "音声認識完了",
