@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { pipeline } from "@huggingface/transformers";
+import { pipeline, type PipelineOptions } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -10,7 +10,6 @@ export const useSpeechRecognition = () => {
   const transcribeAudio = async (audioFile: File) => {
     setIsProcessing(true);
     try {
-      // Get the Hugging Face token from Supabase
       const { data, error } = await supabase.functions.invoke('get-secret', {
         body: { name: 'HUGGING_FACE_ACCESS_TOKEN' }
       });
@@ -20,30 +19,26 @@ export const useSpeechRecognition = () => {
         throw new Error('Failed to get Hugging Face access token. Please make sure it is set in Supabase.');
       }
 
-      // Initialize the transcriber with a smaller Japanese model
+      const options: PipelineOptions = {
+        device: "webgpu",
+        revision: "main",
+        headers: {
+          Authorization: `Bearer ${data.secret}`,
+        },
+      };
+
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         "onnx-community/whisper-small-ja",
-        { 
-          device: "webgpu",
-          revision: "main",
-          fetchOptions: {
-            headers: {
-              Authorization: `Bearer ${data.secret}`,
-            },
-          },
-        }
+        options
       );
 
-      // Convert audio file to ArrayBuffer
       const arrayBuffer = await audioFile.arrayBuffer();
       
-      // Convert ArrayBuffer to Float32Array for audio processing
       const audioContext = new AudioContext();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       const channelData = audioBuffer.getChannelData(0);
       
-      // Process audio data with the transcriber
       const result = await transcriber(channelData, {
         language: "japanese",
         task: "transcribe",
@@ -56,7 +51,6 @@ export const useSpeechRecognition = () => {
         description: "字幕の生成が完了しました",
       });
 
-      // Handle both single output and array output cases
       const text = Array.isArray(result) ? result[0].text : result.text;
       return text;
     } catch (error) {
