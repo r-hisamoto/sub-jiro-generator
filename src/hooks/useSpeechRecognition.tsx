@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { pipeline, type PipelineOptions } from "@huggingface/transformers";
+import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -25,9 +25,9 @@ export const useSpeechRecognition = () => {
         "onnx-community/whisper-small-ja",
         { 
           device: "webgpu",
-          // Cast the options to any to bypass type checking for the accessToken
+          // Cast the options to any to bypass type checking
           // This is necessary because the types are not up to date with the latest API
-        } as PipelineOptions & { accessToken: string }
+        } as any
       );
 
       // Convert audio file to ArrayBuffer
