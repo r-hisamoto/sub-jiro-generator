@@ -58,14 +58,13 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      // Since we can't track progress directly through Supabase's upload method,
-      // we'll simulate progress during upload
+      // Simulate progress during upload with smaller increments
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
-          if (prev >= 90) return prev; // Cap at 90% until complete
-          return prev + 10;
+          if (prev >= 85) return prev; // Cap at 85% until complete
+          return prev + 5; // Smaller increments
         });
-      }, 500);
+      }, 800); // Longer interval
 
       // Upload file to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -76,7 +75,11 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         });
 
       clearInterval(progressInterval);
-      setUploadProgress(100);
+      
+      // Set progress to 100% immediately after successful upload
+      if (!uploadError) {
+        setUploadProgress(100);
+      }
 
       if (uploadError) {
         throw new Error(uploadError.message);
@@ -120,7 +123,6 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       });
     } finally {
       setIsUploading(false);
-      setUploadProgress(0);
     }
   };
 
