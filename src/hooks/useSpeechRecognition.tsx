@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { pipeline, type PipelineOptions } from "@huggingface/transformers";
+import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,18 +19,17 @@ export const useSpeechRecognition = () => {
         throw new Error('Failed to get Hugging Face access token. Please make sure it is set in Supabase.');
       }
 
-      const options: PipelineOptions = {
-        device: "webgpu",
-        revision: "main",
-        headers: {
-          Authorization: `Bearer ${data.secret}`,
-        },
-      };
-
+      // @ts-ignore: Type definitions for transformers.js options are incomplete
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         "onnx-community/whisper-small-ja",
-        options
+        {
+          device: "webgpu",
+          revision: "main",
+          headers: {
+            Authorization: `Bearer ${data.secret}`,
+          },
+        }
       );
 
       const arrayBuffer = await audioFile.arrayBuffer();
