@@ -26,9 +26,9 @@ export const useSpeechRecognition = () => {
         "onnx-community/whisper-small-ja",
         { 
           device: "webgpu",
-          credentials: {
-            accessToken: data.secret
-          }
+          quantized: false,
+          revision: "main",
+          token: data.secret
         }
       );
 
