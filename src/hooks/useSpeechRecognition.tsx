@@ -26,9 +26,11 @@ export const useSpeechRecognition = () => {
         "onnx-community/whisper-small-ja",
         { 
           device: "webgpu",
-          revision: "main"
-        },
-        data.secret // Pass the access token as the fourth parameter
+          revision: "main",
+          credentials: {
+            accessToken: data.secret
+          }
+        }
       );
 
       // Convert audio file to ArrayBuffer
