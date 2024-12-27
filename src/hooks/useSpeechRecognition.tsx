@@ -15,8 +15,7 @@ export const useSpeechRecognition = () => {
         "onnx-community/whisper-large-v2-ja",
         { 
           device: "webgpu",
-          chunk_length_s: 30, // Process in 30-second chunks
-          stride_length_s: 5, // 5-second overlap between chunks
+          // Remove chunk and stride options as they're not part of PretrainedModelOptions
         }
       );
 
@@ -32,6 +31,8 @@ export const useSpeechRecognition = () => {
       const result = await transcriber(channelData, {
         language: "japanese",
         task: "transcribe",
+        chunk_length_s: 30, // Move chunk options to the transcriber call
+        stride_length_s: 5,
       });
       
       toast({
