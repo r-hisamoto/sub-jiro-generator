@@ -3,7 +3,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { VideoFile } from "@/types/subtitle";
 import { Upload } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FileUploadProps {
   onFileSelect: (videoFile: VideoFile) => void;
@@ -12,8 +13,9 @@ interface FileUploadProps {
 const FileUpload = ({ onFileSelect }: FileUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -26,8 +28,61 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       return;
     }
 
-    const url = URL.createObjectURL(file);
-    onFileSelect({ file, url });
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({
+          title: "エラー",
+          description: "ログインが必要です",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-video`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error);
+      }
+
+      const videoFile: VideoFile = {
+        file,
+        url: result.fileUrl,
+      };
+
+      onFileSelect(videoFile);
+      
+      toast({
+        title: "成功",
+        description: "動画ファイルのアップロードが完了しました",
+      });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "エラー",
+        description: error instanceof Error ? error.message : "アップロードに失敗しました",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -43,9 +98,14 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         accept="video/*"
         className="hidden"
         onChange={handleFileChange}
+        disabled={isUploading}
       />
-      <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-        ファイルを選択
+      <Button 
+        variant="secondary" 
+        onClick={() => fileInputRef.current?.click()}
+        disabled={isUploading}
+      >
+        {isUploading ? "アップロード中..." : "ファイルを選択"}
       </Button>
     </div>
   );
