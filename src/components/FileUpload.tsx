@@ -28,13 +28,13 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       return;
     }
 
-    // Validate file size (2GB limit)
-    const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB in bytes
+    // Validate file size (100MB limit)
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB in bytes
     if (file.size > MAX_FILE_SIZE) {
       toast({
         variant: "destructive",
         title: "エラー",
-        description: "ファイルサイズは2GB以下にしてください。",
+        description: "ファイルサイズは100MB以下にしてください。",
       });
       return;
     }
@@ -135,7 +135,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
             <span className="font-semibold">クリックして動画をアップロード</span>
             {" "}または動画をドラッグ＆ドロップ
           </p>
-          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大2GB)</p>
+          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大100MB)</p>
         </div>
         <input
           type="file"
