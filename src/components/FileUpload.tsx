@@ -1,29 +1,28 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { VideoFile } from "@/types/subtitle";
+import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
-import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface FileUploadProps {
-  onFileSelect: (videoFile: VideoFile) => void;
+  onFileSelect: (file: { file: File; url: string }) => void;
 }
 
 const FileUpload = ({ onFileSelect }: FileUploadProps) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const { toast } = useToast();
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("video/")) {
+    // Validate file type
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+    if (!allowedTypes.includes(file.type)) {
       toast({
-        title: "エラー",
-        description: "動画ファイルを選択してください",
         variant: "destructive",
+        title: "エラー",
+        description: "MP4、WebM、OGG形式の動画ファイルのみアップロード可能です。",
       });
       return;
     }
@@ -38,9 +37,9 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       
       if (!session) {
         toast({
-          title: "エラー",
-          description: "ログインが必要です",
           variant: "destructive",
+          title: "エラー",
+          description: "ログインが必要です。",
         });
         return;
       }
@@ -59,26 +58,23 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error);
+        throw new Error(result.error || '動画のアップロードに失敗しました。');
       }
 
-      const videoFile: VideoFile = {
-        file,
-        url: result.fileUrl,
-      };
-
-      onFileSelect(videoFile);
-      
       toast({
         title: "成功",
-        description: "動画ファイルのアップロードが完了しました",
+        description: "動画のアップロードが完了しました。",
+      });
+
+      onFileSelect({
+        file,
+        url: result.publicUrl,
       });
     } catch (error) {
-      console.error('Upload error:', error);
       toast({
-        title: "エラー",
-        description: error instanceof Error ? error.message : "アップロードに失敗しました",
         variant: "destructive",
+        title: "エラー",
+        description: error instanceof Error ? error.message : "動画のアップロードに失敗しました。",
       });
     } finally {
       setIsUploading(false);
@@ -86,27 +82,31 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg bg-muted/50">
-      <Upload className="w-12 h-12 mb-4 text-muted-foreground" />
-      <h3 className="mb-2 text-lg font-medium">動画ファイルをアップロード</h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        ドラッグ＆ドロップまたはクリックしてファイルを選択
-      </p>
-      <Input
-        ref={fileInputRef}
-        type="file"
-        accept="video/*"
-        className="hidden"
-        onChange={handleFileChange}
-        disabled={isUploading}
-      />
-      <Button 
-        variant="secondary" 
-        onClick={() => fileInputRef.current?.click()}
-        disabled={isUploading}
-      >
-        {isUploading ? "アップロード中..." : "ファイルを選択"}
-      </Button>
+    <div className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors">
+      <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
+        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+          <Upload className="w-12 h-12 mb-4 text-gray-400" />
+          <p className="mb-2 text-sm text-gray-500">
+            <span className="font-semibold">クリックして動画をアップロード</span>
+            {" "}または動画をドラッグ＆ドロップ
+          </p>
+          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大100MB)</p>
+        </div>
+        <input
+          type="file"
+          className="hidden"
+          accept="video/mp4,video/webm,video/ogg"
+          onChange={handleFileChange}
+          disabled={isUploading}
+        />
+      </label>
+      {isUploading && (
+        <div className="mt-4">
+          <Button disabled>
+            アップロード中...
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
