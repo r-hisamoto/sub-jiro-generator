@@ -23,9 +23,15 @@ const VideoPlayer = ({
   useEffect(() => {
     const getSignedUrl = async () => {
       try {
+        // Extract the file path from the full URL
+        const filePath = videoUrl.split('/videos/').pop();
+        if (!filePath) {
+          throw new Error('Invalid video URL');
+        }
+
         const { data, error } = await supabase.storage
           .from('videos')
-          .createSignedUrl(videoUrl, 3600); // 1時間有効なURL
+          .createSignedUrl(filePath, 3600); // 1時間有効なURL
 
         if (error) {
           console.error('Error getting signed URL:', error);
