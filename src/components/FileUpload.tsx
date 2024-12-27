@@ -17,11 +17,12 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     file: File,
     filePath: string,
     chunk: Blob,
-    chunkIndex: number
+    chunkIndex: number,
+    isLastChunk: boolean
   ) => {
     const { error: uploadError } = await supabase.storage
       .from('videos')
-      .upload(`${filePath}_part${chunkIndex}`, chunk, {
+      .upload(`${filePath}${isLastChunk ? '' : `_part${chunkIndex}`}`, chunk, {
         cacheControl: '3600',
         upsert: true
       });
@@ -36,51 +37,22 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     try {
       const chunkSize = 50 * 1024 * 1024; // 50MB chunks
       const totalChunks = Math.ceil(file.size / chunkSize);
-      const chunkPromises: Promise<number>[] = [];
       let completedChunks = 0;
 
-      // Prepare chunks for parallel upload
+      // Upload chunks sequentially
       for (let start = 0; start < file.size; start += chunkSize) {
         const chunk = file.slice(start, start + chunkSize);
         const chunkIndex = Math.floor(start / chunkSize);
+        const isLastChunk = chunkIndex === totalChunks - 1;
         
-        // Upload chunks in parallel with a maximum of 3 concurrent uploads
-        if (chunkPromises.length >= 3) {
-          await Promise.race(chunkPromises);
-        }
-
-        const uploadPromise = uploadChunk(file, filePath, chunk, chunkIndex)
-          .then((index) => {
-            completedChunks++;
-            const progress = Math.min((completedChunks / totalChunks) * 100, 95);
-            setUploadProgress(progress);
-            return index;
-          });
-
-        chunkPromises.push(uploadPromise);
+        await uploadChunk(file, filePath, chunk, chunkIndex, isLastChunk);
+        completedChunks++;
+        const progress = Math.min((completedChunks / totalChunks) * 100, 95);
+        setUploadProgress(progress);
       }
 
-      // Wait for all chunks to complete
-      await Promise.all(chunkPromises);
-
-      // Combine chunks using Edge Function
-      const response = await fetch(`https://xwimlzbnnuleqylnekoy.supabase.co/functions/v1/combine-video-chunks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-        },
-        body: JSON.stringify({
-          filePath,
-          totalChunks,
-          fileName: file.name
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to combine video chunks');
-      }
-
+      // No need to combine chunks anymore since the last chunk is already the final file
+      setUploadProgress(100);
       return filePath;
     } catch (error) {
       throw error;
