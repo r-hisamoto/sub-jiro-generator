@@ -19,21 +19,42 @@ export const useSpeechRecognition = () => {
         throw new Error('Failed to get Hugging Face access token. Please make sure it is set in Supabase.');
       }
 
-      // @ts-ignore: Hugging Face transformers.js type definitions are incomplete
+      // WebGPUのサポートチェック
+      if (!navigator.gpu) {
+        throw new Error('WebGPU is not supported in your browser. Please use a modern browser with WebGPU support.');
+      }
+
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         "onnx-community/whisper-small-ja",
         {
           device: "webgpu",
           revision: "main",
-          headers: {
-            Authorization: `Bearer ${data.secret}`
+          fetchOptions: {
+            headers: {
+              Authorization: `Bearer ${data.secret}`
+            }
           }
         }
-      );
+      ).catch((error) => {
+        console.error('Failed to initialize WebGPU:', error);
+        // WebGPU初期化失敗時はCPUにフォールバック
+        return pipeline(
+          "automatic-speech-recognition",
+          "onnx-community/whisper-small-ja",
+          {
+            device: "cpu",
+            revision: "main",
+            fetchOptions: {
+              headers: {
+                Authorization: `Bearer ${data.secret}`
+              }
+            }
+          }
+        );
+      });
 
       const arrayBuffer = await audioFile.arrayBuffer();
-      
       const audioContext = new AudioContext();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       const channelData = audioBuffer.getChannelData(0);
