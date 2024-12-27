@@ -20,16 +20,16 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Create a temporary array to store chunk data
-    const chunks: Uint8Array[] = [];
-    let totalSize = 0;
+    // Process and upload chunks one at a time
+    let finalFilePath = `${filePath}_final`
+    let isFirstChunk = true
 
-    // Download and process chunks sequentially
     for (let i = 0; i < totalChunks; i++) {
       console.log(`Processing chunk ${i + 1}/${totalChunks}`)
       const chunkPath = `${filePath}_part${i}`
       
       try {
+        // Download current chunk
         const { data: chunkData, error: downloadError } = await supabase.storage
           .from('videos')
           .download(chunkPath)
@@ -38,11 +38,21 @@ serve(async (req) => {
           throw new Error(`Failed to download chunk ${i}: ${downloadError.message}`)
         }
 
+        // Convert chunk to Uint8Array
         const chunkArray = new Uint8Array(await chunkData.arrayBuffer())
-        chunks.push(chunkArray)
-        totalSize += chunkArray.length
 
-        // Clean up the chunk immediately
+        // Upload chunk to final file
+        const { error: uploadError } = await supabase.storage
+          .from('videos')
+          .upload(finalFilePath, chunkArray, {
+            upsert: true
+          })
+
+        if (uploadError) {
+          throw new Error(`Failed to upload chunk ${i}: ${uploadError.message}`)
+        }
+
+        // Clean up the processed chunk
         const { error: deleteError } = await supabase.storage
           .from('videos')
           .remove([chunkPath])
@@ -58,30 +68,16 @@ serve(async (req) => {
       }
     }
 
-    // Combine all chunks into a single array
-    console.log('Combining chunks into final file...')
-    const finalBuffer = new Uint8Array(totalSize)
-    let offset = 0
-    for (const chunk of chunks) {
-      finalBuffer.set(chunk, offset)
-      offset += chunk.length
-    }
-
-    // Upload the combined file
-    console.log('Uploading final combined file')
-    const { error: uploadError } = await supabase.storage
+    // Rename final file to original path
+    const { error: moveError } = await supabase.storage
       .from('videos')
-      .upload(filePath, finalBuffer, {
-        contentType: 'video/mp4',
-        upsert: true
-      })
+      .move(finalFilePath, filePath)
 
-    if (uploadError) {
-      console.error('Error uploading final file:', uploadError)
-      throw uploadError
+    if (moveError) {
+      throw new Error(`Failed to finalize file: ${moveError.message}`)
     }
 
-    console.log('Successfully combined and uploaded final file')
+    console.log('Successfully combined all chunks')
     return new Response(
       JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
