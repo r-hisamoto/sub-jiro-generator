@@ -7,7 +7,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -21,48 +20,58 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Create a write stream for the final file
-    const finalFileData = new Uint8Array(0)
-    let currentPosition = 0
+    // Create a temporary array to store chunk data
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
 
-    // Process chunks sequentially
+    // Download and process chunks sequentially
     for (let i = 0; i < totalChunks; i++) {
       console.log(`Processing chunk ${i + 1}/${totalChunks}`)
-      
       const chunkPath = `${filePath}_part${i}`
-      const { data: chunkData, error: downloadError } = await supabase.storage
-        .from('videos')
-        .download(chunkPath)
+      
+      try {
+        const { data: chunkData, error: downloadError } = await supabase.storage
+          .from('videos')
+          .download(chunkPath)
 
-      if (downloadError) {
-        console.error(`Error downloading chunk ${i}:`, downloadError)
-        throw new Error(`Failed to download chunk ${i}: ${downloadError.message}`)
+        if (downloadError) {
+          throw new Error(`Failed to download chunk ${i}: ${downloadError.message}`)
+        }
+
+        const chunkArray = new Uint8Array(await chunkData.arrayBuffer())
+        chunks.push(chunkArray)
+        totalSize += chunkArray.length
+
+        // Clean up the chunk immediately
+        const { error: deleteError } = await supabase.storage
+          .from('videos')
+          .remove([chunkPath])
+
+        if (deleteError) {
+          console.warn(`Warning: Failed to delete chunk ${i}:`, deleteError)
+        }
+
+        console.log(`Successfully processed chunk ${i + 1}/${totalChunks}`)
+      } catch (error) {
+        console.error(`Error processing chunk ${i}:`, error)
+        throw error
       }
+    }
 
-      // Convert chunk to Uint8Array and append to final file
-      const chunkArray = new Uint8Array(await chunkData.arrayBuffer())
-      const newFinalFileData = new Uint8Array(finalFileData.length + chunkArray.length)
-      newFinalFileData.set(finalFileData)
-      newFinalFileData.set(chunkArray, currentPosition)
-      currentPosition += chunkArray.length
-
-      // Clean up the chunk immediately
-      const { error: deleteError } = await supabase.storage
-        .from('videos')
-        .remove([chunkPath])
-
-      if (deleteError) {
-        console.warn(`Warning: Failed to delete chunk ${i}:`, deleteError)
-      }
-
-      console.log(`Successfully processed and cleaned up chunk ${i + 1}/${totalChunks}`)
+    // Combine all chunks into a single array
+    console.log('Combining chunks into final file...')
+    const finalBuffer = new Uint8Array(totalSize)
+    let offset = 0
+    for (const chunk of chunks) {
+      finalBuffer.set(chunk, offset)
+      offset += chunk.length
     }
 
     // Upload the combined file
     console.log('Uploading final combined file')
     const { error: uploadError } = await supabase.storage
       .from('videos')
-      .upload(filePath, finalFileData, {
+      .upload(filePath, finalBuffer, {
         contentType: 'video/mp4',
         upsert: true
       })
