@@ -16,14 +16,10 @@ export const useSpeechRecognition = () => {
 
       if (error || !data?.secret) {
         console.error('Failed to get Hugging Face token:', error);
-        throw new Error('Failed to get Hugging Face access token. Please make sure it is set in Supabase.');
+        throw new Error('Hugging Face APIトークンの取得に失敗しました。');
       }
 
       // WebGPUのサポートチェック
-      if (!navigator.gpu) {
-        console.warn('WebGPU is not supported, falling back to CPU');
-      }
-
       const device = navigator.gpu ? "webgpu" : "cpu";
       console.log(`Using device: ${device}`);
 
@@ -33,6 +29,7 @@ export const useSpeechRecognition = () => {
         {
           device,
           revision: "main",
+          quantized: device === "cpu",
           fetchOptions: {
             headers: {
               Authorization: `Bearer ${data.secret}`
@@ -48,6 +45,7 @@ export const useSpeechRecognition = () => {
           {
             device: "cpu",
             revision: "main",
+            quantized: true,
             fetchOptions: {
               headers: {
                 Authorization: `Bearer ${data.secret}`

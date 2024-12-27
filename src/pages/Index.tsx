@@ -25,11 +25,21 @@ const Index = () => {
   const handleFileSelect = async (file: VideoFile) => {
     setVideoFile(file);
     
+    toast({
+      title: "音声認識開始",
+      description: "動画から音声を認識しています...",
+    });
+    
     // 音声認識処理
     const transcription = await transcribeAudio(file.file);
     if (transcription) {
       const generatedSubtitles = generateSubtitles(transcription);
       setSubtitles(generatedSubtitles);
+      
+      toast({
+        title: "字幕生成完了",
+        description: `${generatedSubtitles.length}個の字幕を生成しました`,
+      });
     }
   };
 
@@ -70,7 +80,7 @@ const Index = () => {
       ) : (
         <div className="space-y-6">
           <div className="flex justify-end">
-            <Button onClick={handleExport}>
+            <Button onClick={handleExport} disabled={isProcessing}>
               <Download className="w-4 h-4 mr-2" />
               SRTファイルをエクスポート
             </Button>
