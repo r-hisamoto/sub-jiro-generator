@@ -20,13 +20,15 @@ export const useSpeechRecognition = () => {
         throw new Error('Failed to get Hugging Face access token. Please make sure it is set in Supabase.');
       }
 
-      // Initialize the transcriber with a smaller Japanese model and access token
+      // Initialize the transcriber with a smaller Japanese model
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         "onnx-community/whisper-small-ja",
         { 
           device: "webgpu",
-          accessToken: data.secret
+          credentials: {
+            accessToken: data.secret
+          }
         }
       );
 
