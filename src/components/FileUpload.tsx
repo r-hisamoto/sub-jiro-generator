@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -41,12 +40,9 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     setIsUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       
-      if (!session) {
+      if (!user) {
         toast({
           variant: "destructive",
           title: "エラー",
@@ -55,21 +51,40 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         return;
       }
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-video`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
-      );
+      // Generate a unique file path including user ID
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      const result = await response.json();
+      // Upload file to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('videos')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-      if (!response.ok) {
-        throw new Error(result.error || '動画のアップロードに失敗しました。');
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('videos')
+        .getPublicUrl(fileName);
+
+      // Insert record into videos table
+      const { error: dbError } = await supabase
+        .from('videos')
+        .insert({
+          title: file.name,
+          file_path: fileName,
+          content_type: file.type,
+          size: file.size,
+          user_id: user.id
+        });
+
+      if (dbError) {
+        throw new Error(dbError.message);
       }
 
       toast({
@@ -79,9 +94,10 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
 
       onFileSelect({
         file,
-        url: result.publicUrl,
+        url: publicUrl,
       });
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         variant: "destructive",
         title: "エラー",
@@ -113,9 +129,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       </label>
       {isUploading && (
         <div className="mt-4">
-          <Button disabled>
-            アップロード中...
-          </Button>
+          <div className="text-sm text-gray-500">アップロード中...</div>
         </div>
       )}
     </div>
