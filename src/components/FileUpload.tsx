@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Progress } from "@/components/ui/progress";
 
 interface FileUploadProps {
   onFileSelect: (file: { file: File; url: string }) => void;
@@ -9,6 +10,7 @@ interface FileUploadProps {
 
 const FileUpload = ({ onFileSelect }: FileUploadProps) => {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,6 +40,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -55,12 +58,16 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      // Upload file to Supabase Storage
+      // Upload file to Supabase Storage with progress tracking
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('videos')
         .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: false
+          upsert: false,
+          onUploadProgress: (progress) => {
+            const percent = (progress.loaded / progress.total) * 100;
+            setUploadProgress(Math.round(percent));
+          },
         });
 
       if (uploadError) {
@@ -105,6 +112,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       });
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -128,8 +136,11 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         />
       </label>
       {isUploading && (
-        <div className="mt-4">
-          <div className="text-sm text-gray-500">アップロード中...</div>
+        <div className="w-full max-w-xs mt-4 space-y-2">
+          <Progress value={uploadProgress} className="h-2" />
+          <p className="text-sm text-center text-gray-500">
+            アップロード中... {uploadProgress}%
+          </p>
         </div>
       )}
     </div>
