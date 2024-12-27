@@ -27,7 +27,7 @@ export const useSpeechRecognition = () => {
         { 
           device: "webgpu",
           revision: "main",
-          token: data.secret
+          accessToken: data.secret
         }
       );
 
