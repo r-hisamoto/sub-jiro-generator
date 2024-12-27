@@ -9,7 +9,9 @@ import { Subtitle, VideoFile } from "@/types/subtitle";
 import { downloadSRT } from "@/lib/subtitleUtils";
 import { generateSubtitles } from "@/lib/subtitleGenerator";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-import { Download, Upload } from "lucide-react";
+import { Download, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
@@ -18,6 +20,7 @@ const Index = () => {
   const [selectedSubtitle, setSelectedSubtitle] = useState<Subtitle | null>(null);
   const { transcribeAudio, isProcessing } = useSpeechRecognition();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleFileSelect = async (file: VideoFile) => {
     setVideoFile(file);
@@ -47,9 +50,20 @@ const Index = () => {
     });
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
+
   return (
     <div className="container py-6 space-y-6">
-      <h1 className="text-3xl font-bold text-center">字幕生成ツール</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">字幕生成ツール</h1>
+        <Button variant="outline" onClick={handleSignOut}>
+          <LogOut className="w-4 h-4 mr-2" />
+          ログアウト
+        </Button>
+      </div>
 
       {!videoFile ? (
         <FileUpload onFileSelect={handleFileSelect} />
