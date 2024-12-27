@@ -19,18 +19,16 @@ export const useSpeechRecognition = () => {
         throw new Error('Failed to get Hugging Face access token. Please make sure it is set in Supabase.');
       }
 
-      // @ts-ignore: Type definitions for transformers.js options are incomplete
+      // @ts-ignore: Hugging Face transformers.js type definitions are incomplete
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         "onnx-community/whisper-small-ja",
         {
           device: "webgpu",
           revision: "main",
-          fetchOptions: {
-            headers: {
-              Authorization: `Bearer ${data.secret}`,
-            },
-          },
+          headers: {
+            Authorization: `Bearer ${data.secret}`
+          }
         }
       );
 
