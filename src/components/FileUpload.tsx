@@ -58,23 +58,25 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      // Create XMLHttpRequest to track upload progress
-      const xhr = new XMLHttpRequest();
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const percent = (event.loaded / event.total) * 100;
-          setUploadProgress(Math.round(percent));
-        }
-      });
+      // Since we can't track progress directly through Supabase's upload method,
+      // we'll simulate progress during upload
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) return prev; // Cap at 90% until complete
+          return prev + 10;
+        });
+      }, 500);
 
       // Upload file to Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('videos')
         .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: false,
-          xhr: xhr
+          upsert: false
         });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
 
       if (uploadError) {
         throw new Error(uploadError.message);
