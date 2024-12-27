@@ -9,20 +9,30 @@ export const useSpeechRecognition = () => {
   const transcribeAudio = async (audioFile: File) => {
     setIsProcessing(true);
     try {
+      // Initialize the transcriber with Japanese model
       const transcriber = await pipeline(
         "automatic-speech-recognition",
-        "onnx-community/whisper-tiny.en",
-        { device: "webgpu" }
+        "onnx-community/whisper-large-v2-ja",
+        { 
+          device: "webgpu",
+          chunk_length_s: 30, // Process in 30-second chunks
+          stride_length_s: 5, // 5-second overlap between chunks
+        }
       );
 
       // Convert audio file to ArrayBuffer
       const arrayBuffer = await audioFile.arrayBuffer();
       
       // Convert ArrayBuffer to Float32Array for audio processing
-      const audioData = new Float32Array(arrayBuffer);
+      const audioContext = new AudioContext();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const channelData = audioBuffer.getChannelData(0);
       
       // Process audio data with the transcriber
-      const result = await transcriber(audioData);
+      const result = await transcriber(channelData, {
+        language: "japanese",
+        task: "transcribe",
+      });
       
       toast({
         title: "音声認識完了",
