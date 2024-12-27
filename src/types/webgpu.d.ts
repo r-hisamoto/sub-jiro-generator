@@ -8,6 +8,7 @@ declare module "@xenova/transformers" {
   export interface PretrainedModelOptions {
     device?: "cpu" | "webgpu" | "wasm";
     revision?: string;
+    quantized?: boolean;
     fetchOptions?: {
       headers: {
         Authorization: string;
