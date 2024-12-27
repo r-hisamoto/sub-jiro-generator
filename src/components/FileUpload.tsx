@@ -13,6 +13,54 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
 
+  const uploadFile = async (file: File, filePath: string) => {
+    try {
+      const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      let uploadedChunks = 0;
+
+      for (let start = 0; start < file.size; start += chunkSize) {
+        const chunk = file.slice(start, start + chunkSize);
+        const { error: uploadError } = await supabase.storage
+          .from('videos')
+          .upload(`${filePath}_part${uploadedChunks}`, chunk, {
+            cacheControl: '3600',
+            upsert: true
+          });
+
+        if (uploadError) {
+          throw new Error(uploadError.message);
+        }
+
+        uploadedChunks++;
+        const progress = Math.min((uploadedChunks / totalChunks) * 100, 95);
+        setUploadProgress(progress);
+      }
+
+      // Combine chunks using Edge Function (this would require implementing a separate Edge Function)
+      const response = await fetch(`https://xwimlzbnnuleqylnekoy.supabase.co/functions/v1/combine-video-chunks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          filePath,
+          totalChunks,
+          fileName: file.name
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to combine video chunks');
+      }
+
+      return filePath;
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -58,32 +106,8 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      // Simulate progress during upload with smaller increments
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 85) return prev; // Cap at 85% until complete
-          return prev + 5; // Smaller increments
-        });
-      }, 800); // Longer interval
-
-      // Upload file to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('videos')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      clearInterval(progressInterval);
-      
-      // Set progress to 100% immediately after successful upload
-      if (!uploadError) {
-        setUploadProgress(100);
-      }
-
-      if (uploadError) {
-        throw new Error(uploadError.message);
-      }
+      // Upload file in chunks
+      await uploadFile(file, fileName);
 
       // Get the public URL
       const { data: { publicUrl } } = supabase.storage
@@ -104,6 +128,8 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       if (dbError) {
         throw new Error(dbError.message);
       }
+
+      setUploadProgress(100);
 
       toast({
         title: "成功",
@@ -149,7 +175,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         <div className="w-full max-w-xs mt-4 space-y-2">
           <Progress value={uploadProgress} className="h-2" />
           <p className="text-sm text-center text-gray-500">
-            アップロード中... {uploadProgress}%
+            アップロード中... {Math.round(uploadProgress)}%
           </p>
         </div>
       )}
