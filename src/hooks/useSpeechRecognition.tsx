@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { pipeline } from "@huggingface/transformers";
+import { pipeline } from "@xenova/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,14 +21,17 @@ export const useSpeechRecognition = () => {
 
       // WebGPUのサポートチェック
       if (!navigator.gpu) {
-        throw new Error('WebGPU is not supported in your browser. Please use a modern browser with WebGPU support.');
+        console.warn('WebGPU is not supported, falling back to CPU');
       }
+
+      const device = navigator.gpu ? "webgpu" : "cpu";
+      console.log(`Using device: ${device}`);
 
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         "onnx-community/whisper-small-ja",
         {
-          device: "webgpu",
+          device,
           revision: "main",
           fetchOptions: {
             headers: {
@@ -37,7 +40,7 @@ export const useSpeechRecognition = () => {
           }
         }
       ).catch((error) => {
-        console.error('Failed to initialize WebGPU:', error);
+        console.error('Failed to initialize pipeline:', error);
         // WebGPU初期化失敗時はCPUにフォールバック
         return pipeline(
           "automatic-speech-recognition",
