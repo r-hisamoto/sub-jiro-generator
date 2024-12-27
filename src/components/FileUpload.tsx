@@ -20,6 +20,12 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     chunkIndex: number,
     isLastChunk: boolean
   ) => {
+    // セッションの確認と更新
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      throw new Error('セッションが無効です。再度ログインしてください。');
+    }
+
     const { error: uploadError } = await supabase.storage
       .from('videos')
       .upload(`${filePath}${isLastChunk ? '' : `_part${chunkIndex}`}`, chunk, {
@@ -28,6 +34,16 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       });
 
     if (uploadError) {
+      console.error('Upload error:', uploadError);
+      if (uploadError.message.includes('jwt expired') || uploadError.message.includes('Unauthorized')) {
+        // セッションの更新を試みる
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          throw new Error('セッションの更新に失敗しました。再度ログインしてください。');
+        }
+        // 更新後に再度アップロードを試みる
+        return uploadChunk(file, filePath, chunk, chunkIndex, isLastChunk);
+      }
       throw new Error(uploadError.message);
     }
     return chunkIndex;
@@ -45,13 +61,17 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         const chunkIndex = Math.floor(start / chunkSize);
         const isLastChunk = chunkIndex === totalChunks - 1;
         
-        await uploadChunk(file, filePath, chunk, chunkIndex, isLastChunk);
-        completedChunks++;
-        const progress = Math.min((completedChunks / totalChunks) * 100, 95);
-        setUploadProgress(progress);
+        try {
+          await uploadChunk(file, filePath, chunk, chunkIndex, isLastChunk);
+          completedChunks++;
+          const progress = Math.min((completedChunks / totalChunks) * 100, 95);
+          setUploadProgress(progress);
+        } catch (error) {
+          console.error('Chunk upload error:', error);
+          throw error;
+        }
       }
 
-      // No need to combine chunks anymore since the last chunk is already the final file
       setUploadProgress(100);
       return filePath;
     } catch (error) {
