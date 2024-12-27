@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -9,13 +10,22 @@ export const useSpeechRecognition = () => {
   const transcribeAudio = async (audioFile: File) => {
     setIsProcessing(true);
     try {
-      // Initialize the transcriber with Japanese model
+      // Get the Hugging Face token from Supabase
+      const { data: { secret: hfToken } } = await supabase.functions.invoke('get-secret', {
+        body: { name: 'HUGGING_FACE_ACCESS_TOKEN' }
+      });
+
+      if (!hfToken) {
+        throw new Error("Hugging Face access token not found");
+      }
+
+      // Initialize the transcriber with a smaller Japanese model
       const transcriber = await pipeline(
         "automatic-speech-recognition",
-        "onnx-community/whisper-large-v2-ja",
+        "onnx-community/whisper-small-ja",
         { 
           device: "webgpu",
-          // Remove chunk and stride options as they're not part of PretrainedModelOptions
+          accessToken: hfToken,
         }
       );
 
@@ -31,7 +41,7 @@ export const useSpeechRecognition = () => {
       const result = await transcriber(channelData, {
         language: "japanese",
         task: "transcribe",
-        chunk_length_s: 30, // Move chunk options to the transcriber call
+        chunk_length_s: 30,
         stride_length_s: 5,
       });
       
@@ -46,9 +56,9 @@ export const useSpeechRecognition = () => {
     } catch (error) {
       console.error("音声認識エラー:", error);
       toast({
-        title: "エラー",
-        description: "音声認識処理中にエラーが発生しました",
         variant: "destructive",
+        title: "エラー",
+        description: "音声認識処理中にエラーが発生しました。Hugging Face のアクセストークンを確認してください。",
       });
       return null;
     } finally {
