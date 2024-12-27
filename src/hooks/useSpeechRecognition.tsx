@@ -15,8 +15,8 @@ export const useSpeechRecognition = () => {
         "onnx-community/whisper-large-v2-ja",
         { 
           device: "webgpu",
-          chunk_length_s: 30, // Process in 30-second chunks
-          stride_length_s: 5, // 5-second overlap between chunks
+          chunkLength: 30, // Process in 30-second chunks
+          strideLength: 5, // 5-second overlap between chunks
         }
       );
 
