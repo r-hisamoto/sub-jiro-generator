@@ -64,7 +64,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: false,
-          onUploadProgress: (progress) => {
+          onProgress: (progress) => {
             const percent = (progress.loaded / progress.total) * 100;
             setUploadProgress(Math.round(percent));
           },
