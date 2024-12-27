@@ -11,12 +11,13 @@ export const useSpeechRecognition = () => {
     setIsProcessing(true);
     try {
       // Get the Hugging Face token from Supabase
-      const { data: { secret: hfToken } } = await supabase.functions.invoke('get-secret', {
+      const { data, error } = await supabase.functions.invoke('get-secret', {
         body: { name: 'HUGGING_FACE_ACCESS_TOKEN' }
       });
 
-      if (!hfToken) {
-        throw new Error("Hugging Face access token not found");
+      if (error || !data?.secret) {
+        console.error('Failed to get Hugging Face token:', error);
+        throw new Error('Failed to get Hugging Face access token. Please make sure it is set in Supabase.');
       }
 
       // Initialize the transcriber with a smaller Japanese model
@@ -25,8 +26,7 @@ export const useSpeechRecognition = () => {
         "onnx-community/whisper-small-ja",
         { 
           device: "webgpu",
-          // Cast the options to any to bypass type checking
-          // This is necessary because the types are not up to date with the latest API
+          // Use type assertion to bypass TypeScript checking for the options
         } as any
       );
 
@@ -59,7 +59,7 @@ export const useSpeechRecognition = () => {
       toast({
         variant: "destructive",
         title: "エラー",
-        description: "音声認識処理中にエラーが発生しました。Hugging Face のアクセストークンを確認してください。",
+        description: error instanceof Error ? error.message : "音声認識処理中にエラーが発生しました",
       });
       return null;
     } finally {
