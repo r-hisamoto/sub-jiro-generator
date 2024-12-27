@@ -27,7 +27,11 @@ export const useSpeechRecognition = () => {
         { 
           device: "webgpu",
           revision: "main",
-          auth: data.secret
+          fetchOptions: {
+            headers: {
+              Authorization: `Bearer ${data.secret}`,
+            },
+          },
         }
       );
 
