@@ -74,7 +74,7 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
-      const chunkSize = 5 * 1024 * 1024; // Reduced to 5MB chunks
+      const chunkSize = 50 * 1024 * 1024; // Changed to 50MB chunks
       const totalChunks = Math.ceil(file.size / chunkSize);
 
       console.log('Starting file upload:', {
