@@ -15,7 +15,7 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
     filePath: string,
     chunkIndex: number,
     totalChunks: number
-  ): Promise<void> {
+  ): Promise<void> => {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session) {
       throw new Error('セッションが無効です。再度ログインしてください。');
