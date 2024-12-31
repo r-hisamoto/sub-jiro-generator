@@ -12,65 +12,72 @@ serve(async (req) => {
   }
 
   try {
-    const { filePath, totalChunks, fileName } = await req.json()
-    console.log(`Starting to combine ${totalChunks} chunks for file: ${fileName}`)
+    const { filePath, totalChunks } = await req.json()
+
+    if (!filePath || !totalChunks) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameters' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Instead of combining chunks, we'll rename the last chunk to be the final file
-    const lastChunkPath = `${filePath}_part${totalChunks - 1}`
-    
-    // First, verify all chunks exist
+    // Download and combine all chunks
+    const chunks: Uint8Array[] = []
     for (let i = 0; i < totalChunks; i++) {
       const chunkPath = `${filePath}_part${i}`
       const { data, error } = await supabase.storage
         .from('videos')
-        .list('', {
-          search: chunkPath
-        })
+        .download(chunkPath)
 
-      if (error || !data.length) {
-        console.error(`Chunk ${i} not found:`, error)
-        throw new Error(`Chunk ${i} is missing`)
+      if (error) {
+        throw error
       }
+
+      const arrayBuffer = await data.arrayBuffer()
+      chunks.push(new Uint8Array(arrayBuffer))
     }
 
-    // Move the last chunk to be the final file
-    const { error: moveError } = await supabase.storage
+    // Combine chunks
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
+    const combinedArray = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      combinedArray.set(chunk, offset)
+      offset += chunk.length
+    }
+
+    // Upload combined file
+    const { error: uploadError } = await supabase.storage
       .from('videos')
-      .move(lastChunkPath, filePath)
+      .upload(filePath, combinedArray, {
+        contentType: 'video/mp4',
+        upsert: true
+      })
 
-    if (moveError) {
-      console.error('Error moving final chunk:', moveError)
-      throw new Error(`Failed to finalize file: ${moveError.message}`)
+    if (uploadError) {
+      throw uploadError
     }
 
-    // Clean up other chunks
-    const deletePromises = []
-    for (let i = 0; i < totalChunks - 1; i++) {
+    // Clean up chunks
+    for (let i = 0; i < totalChunks; i++) {
       const chunkPath = `${filePath}_part${i}`
-      deletePromises.push(
-        supabase.storage
-          .from('videos')
-          .remove([chunkPath])
-      )
+      await supabase.storage
+        .from('videos')
+        .remove([chunkPath])
     }
-
-    // Wait for all deletions to complete
-    await Promise.all(deletePromises)
-    console.log('Successfully cleaned up chunks')
 
     return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ message: 'Chunks combined successfully' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
-    console.error('Error in combine-video-chunks:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'Failed to combine chunks', details: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
