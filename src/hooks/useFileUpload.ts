@@ -21,7 +21,10 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
       throw new Error('セッションが無効です。再度ログインしてください。');
     }
 
-    const chunkPath = `${filePath}_part${chunkIndex}`;
+    // Ensure the file path is correctly formatted
+    const chunkPath = `${filePath.replace(/^videos\//, '')}_part${chunkIndex}`;
+    console.log('Uploading chunk:', { chunkPath, chunkIndex, totalChunks });
+
     const { error: uploadError } = await supabase.storage
       .from('videos')
       .upload(chunkPath, chunk, {
@@ -49,7 +52,10 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
   const combineChunks = async (filePath: string, totalChunks: number): Promise<void> => {
     console.log('Combining chunks:', { filePath, totalChunks });
     const { error } = await supabase.functions.invoke('combine-video-chunks', {
-      body: { filePath, totalChunks }
+      body: { 
+        filePath: filePath.replace(/^videos\//, ''),
+        totalChunks 
+      }
     });
 
     if (error) {
@@ -68,7 +74,7 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
-      const chunkSize = 10 * 1024 * 1024; // 10MB chunks
+      const chunkSize = 5 * 1024 * 1024; // Reduced to 5MB chunks
       const totalChunks = Math.ceil(file.size / chunkSize);
 
       console.log('Starting file upload:', {
@@ -78,16 +84,13 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
         chunkSize
       });
 
-      // Upload chunks in parallel with a maximum of 3 concurrent uploads
-      const maxConcurrent = 3;
-      for (let i = 0; i < totalChunks; i += maxConcurrent) {
-        const chunkPromises = [];
-        for (let j = 0; j < maxConcurrent && i + j < totalChunks; j++) {
-          const start = (i + j) * chunkSize;
-          const chunk = file.slice(start, start + chunkSize);
-          chunkPromises.push(uploadChunk(chunk, fileName, i + j, totalChunks));
-        }
-        await Promise.all(chunkPromises);
+      // Upload chunks sequentially to avoid overwhelming the server
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * chunkSize;
+        const chunk = file.slice(start, start + chunkSize);
+        await uploadChunk(chunk, fileName, i, totalChunks);
+        // Add a small delay between chunks
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       console.log('All chunks uploaded, combining...');
