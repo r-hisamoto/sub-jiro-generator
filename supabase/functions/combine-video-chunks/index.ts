@@ -27,64 +27,69 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Process chunks in smaller batches to reduce memory usage
-    const BATCH_SIZE = 3
+    // Process chunks in even smaller batches
+    const BATCH_SIZE = 2
     let combinedSize = 0
     const chunks: Uint8Array[] = []
 
+    // First pass: calculate total size
+    console.log('Calculating total size...')
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkPath = `${filePath}_part${i}`
+      const { data, error } = await supabase.storage
+        .from('videos')
+        .download(chunkPath)
+      
+      if (error) {
+        console.error(`Error downloading chunk ${i} for size calculation:`, error)
+        throw error
+      }
+      
+      combinedSize += (await data.arrayBuffer()).byteLength
+    }
+
+    console.log(`Total size calculated: ${combinedSize} bytes`)
+    const combinedArray = new Uint8Array(combinedSize)
+    let offset = 0
+
+    // Second pass: process and combine chunks in small batches
     for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks)
       console.log(`Processing batch ${batchStart} to ${batchEnd - 1}`)
 
-      const batchPromises = []
       for (let i = batchStart; i < batchEnd; i++) {
         const chunkPath = `${filePath}_part${i}`
-        batchPromises.push(
-          supabase.storage
-            .from('videos')
-            .download(chunkPath)
-            .then(async ({ data, error }) => {
-              if (error) {
-                console.error(`Error downloading chunk ${i}:`, error)
-                throw error
-              }
-              return new Uint8Array(await data.arrayBuffer())
-            })
-        )
-      }
+        const { data, error } = await supabase.storage
+          .from('videos')
+          .download(chunkPath)
 
-      try {
-        const batchChunks = await Promise.all(batchPromises)
-        for (const chunk of batchChunks) {
-          combinedSize += chunk.length
-          chunks.push(chunk)
+        if (error) {
+          console.error(`Error downloading chunk ${i}:`, error)
+          throw error
         }
-      } catch (error) {
-        console.error('Error processing batch:', error)
-        throw error
+
+        const chunk = new Uint8Array(await data.arrayBuffer())
+        combinedArray.set(chunk, offset)
+        offset += chunk.length
+
+        // Clear reference immediately
+        chunk.fill(0)
+
+        // Force garbage collection if available
+        if (typeof Deno.gc === 'function') {
+          Deno.gc()
+        }
+
+        // Add a small delay between chunks
+        await new Promise(resolve => setTimeout(resolve, 100))
       }
 
-      // Add a delay between batches to allow for garbage collection
-      if (batchEnd < totalChunks) {
-        console.log('Pausing between batches for memory cleanup...')
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      }
+      // Add a longer delay between batches
+      console.log('Pausing between batches for memory cleanup...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
     }
 
-    console.log('All chunks downloaded, combining...')
-
-    // Combine chunks efficiently
-    const combinedArray = new Uint8Array(combinedSize)
-    let offset = 0
-    for (const chunk of chunks) {
-      combinedArray.set(chunk, offset)
-      offset += chunk.length
-      // Clear reference to help with garbage collection
-      chunk.fill(0)
-    }
-    chunks.length = 0 // Clear array to help with garbage collection
-
-    console.log('Uploading combined file...')
+    console.log('All chunks processed and combined, uploading final file...')
 
     // Upload combined file
     const { error: uploadError } = await supabase.storage
@@ -101,7 +106,7 @@ serve(async (req) => {
 
     console.log('Cleaning up chunks...')
 
-    // Clean up chunks in batches
+    // Clean up chunks
     for (let i = 0; i < totalChunks; i++) {
       const chunkPath = `${filePath}_part${i}`
       const { error: deleteError } = await supabase.storage
