@@ -30,20 +30,10 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       return;
     }
 
-    const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
-    if (file.size > MAX_FILE_SIZE) {
-      toast({
-        variant: "destructive",
-        title: "エラー",
-        description: "ファイルサイズは5GB以下にしてください。",
-      });
-      return;
-    }
-
     setIsUploading(true);
 
     try {
-      console.log('Starting file upload:', {
+      console.log('Starting chunked file upload:', {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type
@@ -66,7 +56,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       
       if (error instanceof Error) {
         if (error.message.includes("413")) {
-          errorMessage = "ファイルサイズが大きすぎます。5GB以下のファイルをアップロードしてください。";
+          errorMessage = "ファイルサイズが大きすぎます。";
         } else if (error.message.includes("400")) {
           errorMessage = "ファイル形式が正しくないか、アップロード中にエラーが発生しました。";
         } else {
@@ -93,7 +83,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
             <span className="font-semibold">クリックして動画をアップロード</span>
             {" "}または動画をドラッグ＆ドロップ
           </p>
-          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大5GB)</p>
+          <p className="text-xs text-gray-500">MP4, WebM, OGG</p>
         </div>
         <input
           type="file"

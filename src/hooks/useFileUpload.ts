@@ -6,7 +6,6 @@ const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
 interface UploadProgress {
   loaded: number;
   total: number;
-  progress: number;
 }
 
 export const useFileUpload = (onFileSelect: (result: { file: File; url: string }) => void) => {
@@ -16,8 +15,7 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
   const uploadChunk = async (
     chunk: Blob,
     fileName: string,
-    partNumber: number,
-    onProgress?: (progress: UploadProgress) => void
+    partNumber: number
   ): Promise<boolean> => {
     try {
       const { data: { signedUrl }, error: signedUrlError } = await supabase.storage
@@ -38,8 +36,7 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Chunk upload failed (${response.status}): ${errorText}`);
+        throw new Error(`Chunk upload failed: ${response.statusText}`);
       }
 
       return true;
@@ -53,17 +50,10 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !session) {
-      console.error('Session error:', sessionError);
       throw new Error('ログインが必要です。');
     }
 
     try {
-      console.log('Starting chunked upload:', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
-      });
-
       const fileExt = file.name.split('.').pop();
       const baseFileName = `${session.user.id}/${crypto.randomUUID()}`;
       const finalFileName = `${baseFileName}.${fileExt}`;
@@ -87,7 +77,7 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
         setUploadProgress(progress);
       }
 
-      // Combine chunks and create final file
+      // Combine chunks into final file
       const { error: finalizeError } = await supabase.storage
         .from('videos')
         .upload(finalFileName, file, {
@@ -96,7 +86,6 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
         });
 
       if (finalizeError) {
-        console.error('Finalize error:', finalizeError);
         throw finalizeError;
       }
 
@@ -110,7 +99,6 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
       });
 
       if (dbError) {
-        console.error('Database insert error:', dbError);
         throw dbError;
       }
 
