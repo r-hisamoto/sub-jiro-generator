@@ -30,12 +30,12 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       return;
     }
 
-    const MAX_FILE_SIZE = 50 * 1024 * 1024 * 1024; // 50GB (Pro Plan limit)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
     if (file.size > MAX_FILE_SIZE) {
       toast({
         variant: "destructive",
         title: "エラー",
-        description: "ファイルサイズは50GB以下にしてください。",
+        description: "ファイルサイズは5GB以下にしてください。",
       });
       return;
     }
@@ -66,7 +66,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       
       if (error instanceof Error) {
         if (error.message.includes("413")) {
-          errorMessage = "ファイルサイズが大きすぎます。50GB以下のファイルをアップロードしてください。";
+          errorMessage = "ファイルサイズが大きすぎます。5GB以下のファイルをアップロードしてください。";
         } else if (error.message.includes("400")) {
           errorMessage = "ファイル形式が正しくないか、アップロード中にエラーが発生しました。";
         }
@@ -91,7 +91,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
             <span className="font-semibold">クリックして動画をアップロード</span>
             {" "}または動画をドラッグ＆ドロップ
           </p>
-          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大50GB)</p>
+          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大5GB)</p>
         </div>
         <input
           type="file"
