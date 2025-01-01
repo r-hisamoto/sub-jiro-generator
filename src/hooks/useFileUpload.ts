@@ -24,6 +24,7 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
       console.log('Starting file upload:', {
         fileName,
         fileSize: file.size,
+        fileType: file.type
       });
 
       // Get a pre-signed URL for upload
@@ -40,6 +41,9 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', signedUrlData.signedUrl, true);
+        
+        // Set the Content-Type header to match the file's MIME type
+        xhr.setRequestHeader('Content-Type', file.type);
         
         xhr.upload.addEventListener('progress', (event) => {
           if (event.lengthComputable) {
@@ -72,11 +76,14 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
               reject(error);
             }
           } else {
+            console.error('Upload failed with status:', xhr.status);
+            console.error('Response:', xhr.responseText);
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         });
 
         xhr.addEventListener('error', () => {
+          console.error('XHR error:', xhr.statusText);
           reject(new Error('Upload failed'));
         });
 
