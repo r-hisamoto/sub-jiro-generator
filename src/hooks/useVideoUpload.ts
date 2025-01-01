@@ -1,149 +1,107 @@
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
+import { VideoJob } from '@/types/video';
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
-const MAX_RETRIES = 3;
-const CONCURRENT_UPLOADS = 2;
-const BATCH_DELAY = 500; // 500ms delay between batches
 
-interface UploadProgress {
-  bytesUploaded: number;
-  totalBytes: number;
-  percentage: number;
-  currentChunk: number;
-  totalChunks: number;
-  status: string;
-}
-
-export const useVideoUpload = (onFileSelect: (result: { file: File; url: string }) => void) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
-    bytesUploaded: 0,
-    totalBytes: 0,
-    percentage: 0,
-    currentChunk: 0,
-    totalChunks: 0,
-    status: 'preparing'
-  });
+export const useVideoUpload = () => {
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const uploadChunk = async (
     chunk: Blob,
-    fileName: string,
-    attempt = 1
+    chunkPath: string
   ): Promise<void> => {
-    try {
-      const { error } = await supabase.storage
-        .from('temp-chunks')
-        .upload(fileName, chunk, {
-          upsert: true,
-          contentType: 'application/octet-stream',
-          duplex: 'half'
-        });
-
-      if (error) throw error;
-    } catch (error) {
-      if (attempt < MAX_RETRIES) {
-        const delayMs = Math.min(1000 * Math.pow(2, attempt), 10000);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-        return uploadChunk(chunk, fileName, attempt + 1);
-      }
-      throw error;
-    }
-  };
-
-  const uploadFile = async (file: File): Promise<string> => {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-      throw new Error('Authentication required');
-    }
-
-    const fileExt = file.name.split('.').pop();
-    const baseFileName = `${session.user.id}/${crypto.randomUUID()}`;
-    const finalFileName = `${baseFileName}.${fileExt}`;
-
-    try {
-      setUploadProgress(prev => ({ ...prev, status: 'preparing' }));
-
-      // Calculate total chunks
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      const chunks: { index: number; blob: Blob }[] = [];
-
-      // Prepare chunks
-      for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
-        chunks.push({
-          index: i,
-          blob: file.slice(start, end)
-        });
-      }
-
-      setUploadProgress(prev => ({ 
-        ...prev, 
-        totalBytes: file.size,
-        totalChunks,
-        status: 'uploading'
-      }));
-
-      // Upload chunks with controlled concurrency
-      const chunksArray = [...chunks];
-      let bytesUploaded = 0;
-
-      while (chunksArray.length > 0) {
-        const batch = chunksArray.splice(0, CONCURRENT_UPLOADS);
-        await Promise.all(batch.map(async ({ index, blob }) => {
-          const chunkFileName = `${baseFileName}_${index}`;
-          await uploadChunk(blob, chunkFileName);
-
-          bytesUploaded += blob.size;
-          setUploadProgress(prev => ({
-            ...prev,
-            bytesUploaded,
-            percentage: (bytesUploaded / file.size) * 100,
-            currentChunk: prev.currentChunk + 1
-          }));
-        }));
-
-        if (chunksArray.length > 0) {
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-        }
-      }
-
-      setUploadProgress(prev => ({ ...prev, status: 'processing' }));
-
-      // Trigger server-side processing
-      const { data: processingResult, error: processingError } = await supabase
-        .functions.invoke('process-video', {
-          body: {
-            baseFileName,
-            fileExt,
-            totalChunks,
-            metadata: {
-              contentType: file.type,
-              originalName: file.name,
-              size: file.size
-            }
-          }
-        });
-
-      if (processingError) throw processingError;
-
-      onFileSelect({
-        file,
-        url: processingResult.publicUrl
+    const { error } = await supabase.storage
+      .from('temp-chunks')
+      .upload(chunkPath, chunk, {
+        upsert: true,
+        contentType: 'application/octet-stream'
       });
 
-      return processingResult.publicUrl;
+    if (error) throw error;
+  };
+
+  const createVideoJob = async (
+    fileName: string,
+    fileSize: number,
+    uploadPath: string
+  ): Promise<VideoJob> => {
+    const { data: job, error } = await supabase
+      .from('video_jobs')
+      .insert({
+        status: 'pending',
+        metadata: {
+          filename: fileName,
+          filesize: fileSize
+        },
+        upload_path: uploadPath
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return job;
+  };
+
+  const uploadVideo = async (file: File): Promise<string> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Authentication required');
+
+    const userId = session.user.id;
+    const fileId = crypto.randomUUID();
+    const uploadPath = `${userId}/${fileId}`;
+    let jobId: string;
+
+    try {
+      // Create video job
+      const job = await createVideoJob(file.name, file.size, uploadPath);
+      jobId = job.id;
+
+      // Split file into chunks
+      const chunks: Blob[] = [];
+      let offset = 0;
+      while (offset < file.size) {
+        chunks.push(file.slice(offset, offset + CHUNK_SIZE));
+        offset += CHUNK_SIZE;
+      }
+
+      // Upload chunks
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkPath = `${uploadPath}/chunk_${i}`;
+        await uploadChunk(chunks[i], chunkPath);
+        setUploadProgress((i + 1) / chunks.length * 100);
+      }
+
+      // Trigger processing queue
+      const { error: queueError } = await supabase.functions.invoke('enqueue-video-processing', {
+        body: {
+          jobId,
+          uploadPath,
+          totalChunks: chunks.length,
+          metadata: {
+            filename: file.name,
+            filesize: file.size,
+            contentType: file.type
+          }
+        }
+      });
+
+      if (queueError) throw queueError;
+
+      return jobId;
     } catch (error) {
-      setUploadProgress(prev => ({ ...prev, status: 'error' }));
+      // Cleanup on error
+      if (jobId) {
+        await supabase.from('video_jobs')
+          .update({ 
+            status: 'failed',
+            error: error.message 
+          })
+          .eq('id', jobId);
+      }
       throw error;
     }
   };
 
-  return {
-    isUploading,
-    uploadProgress,
-    uploadFile,
-    setIsUploading
-  };
+  return { uploadVideo, uploadProgress };
 };
