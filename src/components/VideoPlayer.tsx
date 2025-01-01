@@ -21,20 +21,49 @@ const VideoPlayer = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    const getSignedUrl = async () => {
+    const getVideoPath = async () => {
       try {
         if (!videoUrl) {
-          console.error('No video URL provided');
-          return;
+          console.error('No video job ID provided');
+          return null;
         }
 
-        // Extract the bucket path from the full URL
-        const filePath = videoUrl.split('/').slice(2).join('/');
-        console.log('Attempting to get signed URL for path:', filePath);
+        // First, get the video job details
+        const { data: videoJob, error: jobError } = await supabase
+          .from('video_jobs')
+          .select('upload_path, status')
+          .eq('id', videoUrl)
+          .single();
+
+        if (jobError) {
+          console.error('Error fetching video job:', jobError);
+          throw jobError;
+        }
+
+        if (!videoJob || !videoJob.upload_path) {
+          throw new Error('Video path not found');
+        }
+
+        console.log('Found video job:', videoJob);
+        return videoJob.upload_path;
+      } catch (error) {
+        console.error('Error getting video path:', error);
+        throw error;
+      }
+    };
+
+    const getSignedUrl = async () => {
+      try {
+        const filePath = await getVideoPath();
+        if (!filePath) {
+          throw new Error('Could not get video path');
+        }
+
+        console.log('Getting signed URL for path:', filePath);
 
         const { data, error } = await supabase.storage
           .from('videos')
-          .createSignedUrl(filePath, 3600); // 1時間有効なURL
+          .createSignedUrl(filePath, 3600);
 
         if (error) {
           console.error('Error getting signed URL:', error);
