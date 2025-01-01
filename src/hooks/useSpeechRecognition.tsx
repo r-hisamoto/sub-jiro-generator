@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { pipeline, environment } from "@huggingface/transformers";
+import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 const MODEL_ID = "onnx-community/whisper-small-ja";
 
 // Configure environment
-environment.backendConfigs = {
-  webgpu: { numThreads: 4 },
-  wasm: { numThreads: 4 }
+const config = {
+  backendConfigs: {
+    webgl: { numThreads: 4 },
+    wasm: { numThreads: 4 },
+    webgpu: { numThreads: 4 }
+  },
+  useCache: true,
+  cacheDir: "./models",
+  allowRemoteModels: true
 };
-environment.useCache = true;
-environment.cacheDir = "./models";
-environment.allowRemoteModels = true;
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
