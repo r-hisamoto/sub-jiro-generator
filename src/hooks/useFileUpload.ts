@@ -26,45 +26,70 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
         fileSize: file.size,
       });
 
-      // Upload the file directly to storage
-      const { data, error: uploadError } = await supabase.storage
+      // Get a pre-signed URL for upload
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('videos')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            const percent = (progress.loaded / progress.total) * 100;
-            setUploadProgress(Math.min(percent, 95));
-          },
-        });
+        .createSignedUploadUrl(fileName);
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw uploadError;
+      if (signedUrlError) {
+        console.error('Signed URL error:', signedUrlError);
+        throw signedUrlError;
       }
 
-      // Get the public URL
+      // Upload using XMLHttpRequest for progress tracking
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', signedUrlData.signedUrl, true);
+        
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const percent = (event.loaded / event.total) * 100;
+            setUploadProgress(Math.min(percent, 95));
+          }
+        });
+
+        xhr.addEventListener('load', async () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              // Save video metadata to the database
+              const { error: dbError } = await supabase.from('videos').insert({
+                title: file.name,
+                file_path: fileName,
+                content_type: file.type,
+                size: file.size,
+                user_id: user.id
+              });
+
+              if (dbError) {
+                console.error('Database insert error:', dbError);
+                reject(dbError);
+                return;
+              }
+
+              setUploadProgress(100);
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Upload failed'));
+        });
+
+        xhr.send(file);
+      });
+
+      // Get the public URL after successful upload
       const { data: { publicUrl } } = supabase.storage
         .from('videos')
         .getPublicUrl(fileName);
 
       console.log('File upload completed:', { publicUrl });
 
-      // Save video metadata to the database
-      const { error: dbError } = await supabase.from('videos').insert({
-        title: file.name,
-        file_path: fileName,
-        content_type: file.type,
-        size: file.size,
-        user_id: user.id
-      });
-
-      if (dbError) {
-        console.error('Database insert error:', dbError);
-        throw dbError;
-      }
-
-      setUploadProgress(100);
       return publicUrl;
     } catch (error) {
       console.error('Upload process error:', error);
