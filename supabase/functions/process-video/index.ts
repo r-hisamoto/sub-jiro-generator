@@ -104,6 +104,17 @@ async function processChunkStream(
       partIndex++;
     }
 
+    // Update video job status to processing
+    const { error: updateError } = await supabase
+      .from('video_jobs')
+      .update({ status: 'processing' })
+      .eq('upload_path', uploadPath);
+
+    if (updateError) {
+      console.error('Error updating video job status:', updateError);
+      throw updateError;
+    }
+
     console.log('Saving video parts information');
     const { error: dbError } = await supabase
       .from('video_parts')
@@ -135,6 +146,14 @@ async function processChunkStream(
     return finalPath;
   } catch (error) {
     console.error('Error in processChunkStream:', error);
+    // Update video job status to failed
+    await supabase
+      .from('video_jobs')
+      .update({ 
+        status: 'failed',
+        error: error.message
+      })
+      .eq('upload_path', uploadPath);
     throw error;
   }
 }

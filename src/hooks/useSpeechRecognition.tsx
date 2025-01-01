@@ -2,7 +2,28 @@ import { useState } from "react";
 import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import type { TranscriberOptions } from "@/types/transformers-overrides";
+
+interface TranscriberOptions {
+  device: string;
+  revision: string;
+  quantized: boolean;
+  progressCallback: (progress: number) => void;
+  config: {
+    useCache: boolean;
+    allowRemoteModels: boolean;
+  };
+  fetchOptions?: {
+    headers: {
+      Authorization: string;
+    };
+  };
+  chunkLength: number;
+  strideLength: number;
+  language: "ja";
+  task: "transcribe" | "translate";
+  returnTimestamps: boolean;
+  timestampGranularity: "word" | "char";
+}
 
 const MODEL_ID = "onnx-community/whisper-small-ja";
 
@@ -25,13 +46,12 @@ const getPipelineOptions = (token: string | undefined): TranscriberOptions => ({
       }
     }
   }),
-  // Whisper specific options
   chunkLength: 30,
   strideLength: 5,
   language: "ja",
-  task: "transcribe" as const,
+  task: "transcribe",
   returnTimestamps: true,
-  timestampGranularity: "word" as const
+  timestampGranularity: "word"
 });
 
 export const useSpeechRecognition = () => {
@@ -77,7 +97,7 @@ export const useSpeechRecognition = () => {
       const channelData = audioBuffer.getChannelData(0);
       
       const result = await transcriber(channelData, {
-        language: "japanese",
+        language: "ja",
         task: "transcribe",
         chunkLength: 30,
         strideLength: 5,
