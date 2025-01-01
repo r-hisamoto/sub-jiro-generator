@@ -12,19 +12,25 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const uploadFile = async (file: File): Promise<string> => {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      console.error('User error:', userError);
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error('Session error:', sessionError);
       throw new Error('ログインが必要です。');
     }
 
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
+      const fileName = `${session.user.id}/${crypto.randomUUID()}.${fileExt}`;
 
       // Use TUS for files larger than 6MB
       if (file.size > 6 * 1024 * 1024) {
-        return await uploadWithTUS(file, fileName, user.id);
+        console.log('Using TUS upload for large file:', {
+          fileName,
+          fileSize: file.size,
+          fileType: file.type
+        });
+        return await uploadWithTUS(file, fileName, session.access_token);
       }
 
       // Use standard upload for smaller files
@@ -50,6 +56,20 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
         .from('videos')
         .getPublicUrl(fileName);
 
+      // Save video metadata to the database
+      const { error: dbError } = await supabase.from('videos').insert({
+        title: file.name,
+        file_path: fileName,
+        content_type: file.type,
+        size: file.size,
+        user_id: session.user.id
+      });
+
+      if (dbError) {
+        console.error('Database insert error:', dbError);
+        throw dbError;
+      }
+
       return publicUrl;
     } catch (error) {
       console.error('Upload process error:', error);
@@ -57,12 +77,13 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
     }
   };
 
-  const uploadWithTUS = (file: File, fileName: string, userId: string): Promise<string> => {
+  const uploadWithTUS = (file: File, fileName: string, accessToken: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const upload = new tus.Upload(file, {
-        endpoint: `https://xwimlzbnnuleqylnekoy.supabase.co/storage/v1/upload/resumable`,
+        endpoint: `${supabase.storageUrl}/upload/resumable`,
         retryDelays: [0, 3000, 5000, 10000, 20000],
         headers: {
+          authorization: `Bearer ${accessToken}`,
           'x-upsert': 'true',
         },
         uploadDataDuringCreation: true,
@@ -84,21 +105,6 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
         },
         onSuccess: async () => {
           try {
-            // Save video metadata to the database
-            const { error: dbError } = await supabase.from('videos').insert({
-              title: file.name,
-              file_path: fileName,
-              content_type: file.type,
-              size: file.size,
-              user_id: userId
-            });
-
-            if (dbError) {
-              console.error('Database insert error:', dbError);
-              reject(dbError);
-              return;
-            }
-
             const { data: { publicUrl } } = supabase.storage
               .from('videos')
               .getPublicUrl(fileName);
