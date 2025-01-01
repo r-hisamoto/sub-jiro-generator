@@ -2,6 +2,7 @@ import { useState } from "react";
 import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { TranscriberOptions } from "@/types/transformers-overrides";
 
 const MODEL_ID = "onnx-community/whisper-small-ja";
 
