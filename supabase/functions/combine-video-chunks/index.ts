@@ -27,86 +27,75 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Process chunks in even smaller batches
-    const BATCH_SIZE = 2
-    let combinedSize = 0
-    const chunks: Uint8Array[] = []
-
-    // First pass: calculate total size
-    console.log('Calculating total size...')
+    // Process one chunk at a time
+    console.log('Starting chunk processing...')
+    const chunks = []
+    
     for (let i = 0; i < totalChunks; i++) {
+      console.log(`Processing chunk ${i + 1}/${totalChunks}`)
       const chunkPath = `${filePath}_part${i}`
-      const { data, error } = await supabase.storage
-        .from('videos')
-        .download(chunkPath)
       
-      if (error) {
-        console.error(`Error downloading chunk ${i} for size calculation:`, error)
-        throw error
-      }
-      
-      combinedSize += (await data.arrayBuffer()).byteLength
-    }
-
-    console.log(`Total size calculated: ${combinedSize} bytes`)
-    const combinedArray = new Uint8Array(combinedSize)
-    let offset = 0
-
-    // Second pass: process and combine chunks in small batches
-    for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks)
-      console.log(`Processing batch ${batchStart} to ${batchEnd - 1}`)
-
-      for (let i = batchStart; i < batchEnd; i++) {
-        const chunkPath = `${filePath}_part${i}`
-        const { data, error } = await supabase.storage
+      try {
+        const { data: chunkData, error: downloadError } = await supabase.storage
           .from('videos')
           .download(chunkPath)
 
-        if (error) {
-          console.error(`Error downloading chunk ${i}:`, error)
-          throw error
+        if (downloadError) {
+          console.error(`Error downloading chunk ${i}:`, downloadError)
+          throw downloadError
         }
 
-        const chunk = new Uint8Array(await data.arrayBuffer())
-        combinedArray.set(chunk, offset)
-        offset += chunk.length
+        // Add chunk to array (we'll keep the array small since we're processing one at a time)
+        chunks.push(await chunkData.arrayBuffer())
 
-        // Clear reference immediately
-        chunk.fill(0)
+        // If we have 2 chunks or this is the last chunk, combine and upload
+        if (chunks.length === 2 || i === totalChunks - 1) {
+          // Combine current chunks
+          const combinedSize = chunks.reduce((acc, chunk) => acc + chunk.byteLength, 0)
+          const combinedArray = new Uint8Array(combinedSize)
+          
+          let offset = 0
+          for (const chunk of chunks) {
+            combinedArray.set(new Uint8Array(chunk), offset)
+            offset += chunk.byteLength
+          }
 
-        // Force garbage collection if available
-        if (typeof Deno.gc === 'function') {
-          Deno.gc()
+          // Upload the combined segment
+          const segmentPath = i === totalChunks - 1 ? filePath : `${filePath}_temp${Math.floor(i/2)}`
+          console.log(`Uploading segment: ${segmentPath}`)
+          
+          const { error: uploadError } = await supabase.storage
+            .from('videos')
+            .upload(segmentPath, combinedArray, {
+              contentType: 'video/mp4',
+              upsert: true
+            })
+
+          if (uploadError) {
+            console.error('Upload error:', uploadError)
+            throw uploadError
+          }
+
+          // Clear chunks array
+          chunks.length = 0
+          
+          // Force garbage collection if available
+          if (typeof Deno.gc === 'function') {
+            Deno.gc()
+          }
+
+          // Small delay to allow for memory cleanup
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
-
-        // Add a small delay between chunks
-        await new Promise(resolve => setTimeout(resolve, 100))
+      } catch (error) {
+        console.error(`Error processing chunk ${i}:`, error)
+        throw error
       }
-
-      // Add a longer delay between batches
-      console.log('Pausing between batches for memory cleanup...')
-      await new Promise(resolve => setTimeout(resolve, 2000))
     }
 
-    console.log('All chunks processed and combined, uploading final file...')
+    console.log('Cleaning up temporary chunks...')
 
-    // Upload combined file
-    const { error: uploadError } = await supabase.storage
-      .from('videos')
-      .upload(filePath, combinedArray, {
-        contentType: 'video/mp4',
-        upsert: true
-      })
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError)
-      throw uploadError
-    }
-
-    console.log('Cleaning up chunks...')
-
-    // Clean up chunks
+    // Clean up original chunks
     for (let i = 0; i < totalChunks; i++) {
       const chunkPath = `${filePath}_part${i}`
       const { error: deleteError } = await supabase.storage
@@ -115,20 +104,35 @@ serve(async (req) => {
       
       if (deleteError) {
         console.error(`Error deleting chunk ${i}:`, deleteError)
+        // Continue despite error
+      }
+    }
+
+    // Clean up temporary segments if any exist
+    const tempSegments = Math.floor((totalChunks - 1) / 2)
+    for (let i = 0; i < tempSegments; i++) {
+      const tempPath = `${filePath}_temp${i}`
+      const { error: deleteError } = await supabase.storage
+        .from('videos')
+        .remove([tempPath])
+      
+      if (deleteError) {
+        console.error(`Error deleting temp segment ${i}:`, deleteError)
+        // Continue despite error
       }
     }
 
     console.log('Process completed successfully')
 
     return new Response(
-      JSON.stringify({ message: 'Chunks combined successfully' }),
+      JSON.stringify({ message: 'Video processing completed successfully' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
   } catch (error) {
     console.error('Error in combine-video-chunks:', error)
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to combine chunks', 
+        error: 'Failed to process video', 
         details: error.message,
         code: 'PROCESSING_ERROR'
       }),
