@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { pipeline } from "@huggingface/transformers";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriberOptions {
@@ -32,7 +32,8 @@ interface TranscriberOptions {
   timestampGranularity: "word" | "segment";
 }
 
-const MODEL_ID = "onnx-community/whisper-small-ja";
+// Using a public model that's optimized for Japanese
+const MODEL_ID = "Xenova/whisper-small.ja";
 
 // Configure pipeline options
 const getPipelineOptions = (token: string | undefined): TranscriberOptions => ({
