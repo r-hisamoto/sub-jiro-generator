@@ -30,12 +30,12 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       return;
     }
 
-    const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
+    const MAX_FILE_SIZE = 50 * 1024 * 1024 * 1024; // 50GB (Pro Plan limit)
     if (file.size > MAX_FILE_SIZE) {
       toast({
         variant: "destructive",
         title: "エラー",
-        description: "ファイルサイズは5GB以下にしてください。",
+        description: "ファイルサイズは50GB以下にしてください。",
       });
       return;
     }
@@ -43,6 +43,12 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     setIsUploading(true);
 
     try {
+      console.log('Starting file upload:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
+
       const publicUrl = await uploadFile(file);
       
       toast({
@@ -56,10 +62,20 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       });
     } catch (error) {
       console.error('Upload error:', error);
+      let errorMessage = "動画のアップロードに失敗しました。";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("413")) {
+          errorMessage = "ファイルサイズが大きすぎます。50GB以下のファイルをアップロードしてください。";
+        } else if (error.message.includes("400")) {
+          errorMessage = "ファイル形式が正しくないか、アップロード中にエラーが発生しました。";
+        }
+      }
+      
       toast({
         variant: "destructive",
         title: "エラー",
-        description: error instanceof Error ? error.message : "動画のアップロードに失敗しました。",
+        description: errorMessage,
       });
     } finally {
       setIsUploading(false);
@@ -75,7 +91,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
             <span className="font-semibold">クリックして動画をアップロード</span>
             {" "}または動画をドラッグ＆ドロップ
           </p>
-          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大5GB)</p>
+          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大50GB)</p>
         </div>
         <input
           type="file"
