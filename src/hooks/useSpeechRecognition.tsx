@@ -4,7 +4,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriberOptions {
-  device: string;
+  device: "cpu" | "webgl" | "webgpu" | "wasm";
   revision: string;
   quantized: boolean;
   progressCallback: (progress: number) => void;
@@ -100,7 +100,7 @@ export const useSpeechRecognition = () => {
           MODEL_ID,
           {
             ...getPipelineOptions(data.secret),
-            device: "cpu"
+            device: "cpu" as const
           }
         );
       });
