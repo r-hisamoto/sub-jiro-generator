@@ -69,6 +69,33 @@ export type Database = {
         }
         Relationships: []
       }
+      video_parts: {
+        Row: {
+          created_at: string | null
+          file_path: string
+          id: string
+          status: string
+          total_parts: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          file_path: string
+          id?: string
+          status: string
+          total_parts: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          file_path?: string
+          id?: string
+          status?: string
+          total_parts?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       video_uploads: {
         Row: {
           chunks_total: number
