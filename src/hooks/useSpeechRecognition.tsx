@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 const MODEL_ID = "onnx-community/whisper-small-ja";
 
 // Configure pipeline options
-const getPipelineOptions = (token: string | undefined) => ({
+const getPipelineOptions = (token: string | undefined): TranscriberOptions => ({
   device: "webgpu",
   revision: "main",
   quantized: true,
@@ -28,9 +28,9 @@ const getPipelineOptions = (token: string | undefined) => ({
   chunkLength: 30,
   strideLength: 5,
   language: "ja",
-  task: "transcribe",
+  task: "transcribe" as const,
   returnTimestamps: true,
-  timestampGranularity: "word"
+  timestampGranularity: "word" as const
 });
 
 export const useSpeechRecognition = () => {
