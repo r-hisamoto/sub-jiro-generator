@@ -1,6 +1,7 @@
 import { Upload } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useVideoUpload } from "@/hooks/useVideoUpload";
+import { useState } from "react"; // Added this import
 import FileUploadProgress from "./FileUploadProgress";
 
 interface FileUploadProps {
