@@ -80,7 +80,7 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
   const uploadWithTUS = (file: File, fileName: string, accessToken: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const upload = new tus.Upload(file, {
-        endpoint: `${supabase.storageUrl}/upload/resumable`,
+        endpoint: `${process.env.VITE_SUPABASE_URL}/storage/v1/upload/resumable`,
         retryDelays: [0, 3000, 5000, 10000, 20000],
         headers: {
           authorization: `Bearer ${accessToken}`,
