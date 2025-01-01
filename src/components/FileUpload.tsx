@@ -69,6 +69,8 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
           errorMessage = "ファイルサイズが大きすぎます。5GB以下のファイルをアップロードしてください。";
         } else if (error.message.includes("400")) {
           errorMessage = "ファイル形式が正しくないか、アップロード中にエラーが発生しました。";
+        } else {
+          errorMessage = `${errorMessage} (${error.message})`;
         }
       }
       

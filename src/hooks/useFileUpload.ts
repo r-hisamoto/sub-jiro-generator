@@ -1,14 +1,53 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-interface UploadResult {
-  file: File;
-  url: string;
+const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+
+interface UploadProgress {
+  loaded: number;
+  total: number;
+  progress: number;
 }
 
-export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
+export const useFileUpload = (onFileSelect: (result: { file: File; url: string }) => void) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const uploadChunk = async (
+    chunk: Blob,
+    fileName: string,
+    partNumber: number,
+    onProgress?: (progress: UploadProgress) => void
+  ): Promise<boolean> => {
+    try {
+      const { data: { signedUrl }, error: signedUrlError } = await supabase.storage
+        .from('videos')
+        .createSignedUploadUrl(`${fileName}.part${partNumber}`);
+
+      if (signedUrlError) {
+        console.error('Signed URL error:', signedUrlError);
+        throw signedUrlError;
+      }
+
+      const response = await fetch(signedUrl, {
+        method: 'PUT',
+        body: chunk,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Chunk upload failed (${response.status}): ${errorText}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`Chunk ${partNumber} upload failed:`, error);
+      throw error;
+    }
+  };
 
   const uploadFile = async (file: File): Promise<string> => {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -19,42 +58,52 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
     }
 
     try {
-      console.log('Starting file upload:', {
+      console.log('Starting chunked upload:', {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type
       });
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${session.user.id}/${crypto.randomUUID()}.${fileExt}`;
+      const baseFileName = `${session.user.id}/${crypto.randomUUID()}`;
+      const finalFileName = `${baseFileName}.${fileExt}`;
 
-      // Create a signed URL for the upload
-      const { data: { signedUrl, path }, error: signedUrlError } = await supabase.storage
+      // Split file into chunks
+      const chunks: Blob[] = [];
+      let offset = 0;
+      while (offset < file.size) {
+        chunks.push(file.slice(offset, offset + CHUNK_SIZE));
+        offset += CHUNK_SIZE;
+      }
+
+      // Upload chunks with progress tracking
+      let bytesUploaded = 0;
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        await uploadChunk(chunk, baseFileName, i);
+        
+        bytesUploaded += chunk.size;
+        const progress = (bytesUploaded / file.size) * 100;
+        setUploadProgress(progress);
+      }
+
+      // Combine chunks and create final file
+      const { error: finalizeError } = await supabase.storage
         .from('videos')
-        .createSignedUploadUrl(fileName);
+        .upload(finalFileName, file, {
+          upsert: true,
+          contentType: file.type
+        });
 
-      if (signedUrlError) {
-        console.error('Signed URL error:', signedUrlError);
-        throw signedUrlError;
+      if (finalizeError) {
+        console.error('Finalize error:', finalizeError);
+        throw finalizeError;
       }
 
-      // Upload the file using the signed URL
-      const uploadResponse = await fetch(signedUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type,
-        },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-      }
-
-      // Save video metadata to the database
+      // Save metadata to database
       const { error: dbError } = await supabase.from('videos').insert({
         title: file.name,
-        file_path: path,
+        file_path: finalFileName,
         content_type: file.type,
         size: file.size,
         user_id: session.user.id
@@ -65,12 +114,19 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
         throw dbError;
       }
 
-      // Get the public URL for the uploaded file
+      // Clean up chunk files
+      await Promise.all(
+        chunks.map((_, i) =>
+          supabase.storage
+            .from('videos')
+            .remove([`${baseFileName}.part${i}`])
+        )
+      );
+
       const { data: { publicUrl } } = supabase.storage
         .from('videos')
-        .getPublicUrl(path);
+        .getPublicUrl(finalFileName);
 
-      setUploadProgress(100);
       return publicUrl;
     } catch (error) {
       console.error('Upload process error:', error);
@@ -82,7 +138,6 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
     isUploading,
     uploadProgress,
     uploadFile,
-    setIsUploading,
-    setUploadProgress
+    setIsUploading
   };
 };
