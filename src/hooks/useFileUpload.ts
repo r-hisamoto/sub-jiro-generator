@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 
-// Reduced chunk size for better reliability
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
-const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB (Pro plan limit)
+const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
 const MAX_RETRIES = 3;
-const CONCURRENT_UPLOADS = 2; // Reduced concurrent uploads
+const CONCURRENT_UPLOADS = 2;
 const BATCH_DELAY = 500; // 500ms delay between batches
 
 interface UploadProgress {
@@ -35,7 +34,7 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
   ): Promise<void> => {
     try {
       const { error } = await supabase.storage
-        .from('videos')
+        .from('temp-chunks')
         .upload(fileName, chunk, {
           upsert: true,
           contentType: 'application/octet-stream',
@@ -44,7 +43,6 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
 
       if (error) throw error;
     } catch (error) {
-      console.error('Chunk upload error:', error);
       if (attempt < MAX_RETRIES) {
         const delayMs = Math.min(1000 * Math.pow(2, attempt), 10000);
         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -92,7 +90,7 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
         status: 'uploading'
       }));
 
-      // Upload chunks with controlled concurrency and delays
+      // Upload chunks with controlled concurrency
       const chunksArray = [...chunks];
       let bytesUploaded = 0;
 
@@ -111,46 +109,39 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
           }));
         }));
 
-        // Add delay between batches to prevent overload
         if (chunksArray.length > 0) {
           await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
         }
       }
 
-      // Upload final file
-      const { error: finalizeError } = await supabase.storage
-        .from('videos')
-        .upload(finalFileName, file, {
-          upsert: true,
-          contentType: file.type
+      setUploadProgress(prev => ({ ...prev, status: 'processing' }));
+
+      // Trigger server-side processing
+      const { data: processingResult, error: processingError } = await supabase
+        .functions.invoke('process-video', {
+          body: {
+            baseFileName,
+            fileExt,
+            totalChunks,
+            metadata: {
+              contentType: file.type,
+              originalName: file.name,
+              size: file.size
+            }
+          }
         });
 
-      if (finalizeError) throw finalizeError;
+      if (processingError) throw processingError;
 
-      const { data } = supabase.storage
-        .from('videos')
-        .getPublicUrl(finalFileName);
+      onFileSelect({
+        file,
+        url: processingResult.publicUrl
+      });
 
-      if (!data?.publicUrl) {
-        throw new Error('Failed to get public URL');
-      }
-
-      return data.publicUrl;
+      return processingResult.publicUrl;
     } catch (error) {
       setUploadProgress(prev => ({ ...prev, status: 'error' }));
       throw error;
-    } finally {
-      // Cleanup temporary chunks
-      const cleanupPromises = Array(uploadProgress.totalChunks)
-        .fill(0)
-        .map((_, i) => 
-          supabase.storage
-            .from('videos')
-            .remove([`${baseFileName}_${i}`])
-            .catch(console.warn)
-        );
-      
-      await Promise.all(cleanupPromises);
     }
   };
 
