@@ -9,6 +9,53 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      processing_queue: {
+        Row: {
+          attempts: number | null
+          created_at: string | null
+          id: string
+          job_id: string
+          last_attempt_at: string | null
+          metadata: Json
+          processed_at: string | null
+          status: string
+          total_chunks: number
+          upload_path: string
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string | null
+          id?: string
+          job_id: string
+          last_attempt_at?: string | null
+          metadata: Json
+          processed_at?: string | null
+          status: string
+          total_chunks: number
+          upload_path: string
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string | null
+          id?: string
+          job_id?: string
+          last_attempt_at?: string | null
+          metadata?: Json
+          processed_at?: string | null
+          status?: string
+          total_chunks?: number
+          upload_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_queue_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "video_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -65,6 +112,42 @@ export type Database = {
           total_size?: number
           updated_at?: string
           uploaded_chunks?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      video_jobs: {
+        Row: {
+          created_at: string | null
+          error: string | null
+          id: string
+          metadata: Json
+          output_path: string | null
+          status: string
+          updated_at: string | null
+          upload_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          metadata: Json
+          output_path?: string | null
+          status: string
+          updated_at?: string | null
+          upload_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          metadata?: Json
+          output_path?: string | null
+          status?: string
+          updated_at?: string | null
+          upload_path?: string
           user_id?: string
         }
         Relationships: []

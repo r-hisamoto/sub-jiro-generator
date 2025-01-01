@@ -9,12 +9,8 @@ interface FileUploadProps {
 
 const FileUpload = ({ onFileSelect }: FileUploadProps) => {
   const { toast } = useToast();
-  const {
-    isUploading,
-    uploadProgress,
-    uploadFile,
-    setIsUploading
-  } = useVideoUpload(onFileSelect);
+  const { uploadVideo, uploadProgress } = useVideoUpload();
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -33,13 +29,13 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     setIsUploading(true);
 
     try {
-      console.log('Starting chunked file upload:', {
+      console.log('Starting video upload:', {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type
       });
 
-      const publicUrl = await uploadFile(file);
+      const jobId = await uploadVideo(file);
       
       toast({
         title: "成功",
@@ -48,7 +44,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
 
       onFileSelect({
         file,
-        url: publicUrl,
+        url: jobId, // We'll use the jobId as a reference
       });
     } catch (error) {
       console.error('Upload error:', error);
@@ -93,7 +89,19 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
           disabled={isUploading}
         />
       </label>
-      {isUploading && <FileUploadProgress progress={uploadProgress} />}
+      {isUploading && (
+        <div className="w-full max-w-xs mt-4">
+          <div className="bg-gray-200 rounded-full h-2.5">
+            <div
+              className="bg-blue-600 h-2.5 rounded-full"
+              style={{ width: `${uploadProgress}%` }}
+            ></div>
+          </div>
+          <p className="text-sm text-center text-gray-500 mt-2">
+            {Math.round(uploadProgress)}%
+          </p>
+        </div>
+      )}
     </div>
   );
 };

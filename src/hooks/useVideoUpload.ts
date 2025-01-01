@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import { VideoJob } from '@/types/video';
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
 
@@ -24,11 +23,13 @@ export const useVideoUpload = () => {
   const createVideoJob = async (
     fileName: string,
     fileSize: number,
-    uploadPath: string
-  ): Promise<VideoJob> => {
+    uploadPath: string,
+    userId: string
+  ): Promise<string> => {
     const { data: job, error } = await supabase
       .from('video_jobs')
       .insert({
+        user_id: userId,
         status: 'pending',
         metadata: {
           filename: fileName,
@@ -40,7 +41,7 @@ export const useVideoUpload = () => {
       .single();
 
     if (error) throw error;
-    return job;
+    return job.id;
   };
 
   const uploadVideo = async (file: File): Promise<string> => {
@@ -54,8 +55,7 @@ export const useVideoUpload = () => {
 
     try {
       // Create video job
-      const job = await createVideoJob(file.name, file.size, uploadPath);
-      jobId = job.id;
+      jobId = await createVideoJob(file.name, file.size, uploadPath, userId);
 
       // Split file into chunks
       const chunks: Blob[] = [];
@@ -92,10 +92,11 @@ export const useVideoUpload = () => {
     } catch (error) {
       // Cleanup on error
       if (jobId) {
-        await supabase.from('video_jobs')
+        await supabase
+          .from('video_jobs')
           .update({ 
             status: 'failed',
-            error: error.message 
+            error: error instanceof Error ? error.message : 'Unknown error'
           })
           .eq('id', jobId);
       }
