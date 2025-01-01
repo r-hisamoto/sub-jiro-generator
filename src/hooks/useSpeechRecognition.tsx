@@ -85,7 +85,7 @@ export const useSpeechRecognition = () => {
       }
 
       // WebGPUのサポートチェック
-      const device = navigator.gpu ? "webgpu" : "cpu";
+      const device = navigator.gpu ? "webgpu" as const : "wasm" as const;
       console.log(`Using device: ${device}`);
 
       const transcriber = await pipeline(
@@ -94,13 +94,13 @@ export const useSpeechRecognition = () => {
         getPipelineOptions(data.secret)
       ).catch((error) => {
         console.error('Failed to initialize pipeline:', error);
-        // WebGPU初期化失敗時はCPUにフォールバック
+        // WebGPU初期化失敗時はwasmにフォールバック
         return pipeline(
           "automatic-speech-recognition",
           MODEL_ID,
           {
             ...getPipelineOptions(data.secret),
-            device: "cpu" as const
+            device: "wasm" as const
           }
         );
       });
