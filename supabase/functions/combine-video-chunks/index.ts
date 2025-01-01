@@ -28,9 +28,9 @@ serve(async (req) => {
     )
 
     // Process chunks in smaller batches to reduce memory usage
-    const BATCH_SIZE = 5
-    const finalChunks: Uint8Array[] = []
-    let totalSize = 0
+    const BATCH_SIZE = 3
+    let combinedSize = 0
+    const chunks: Uint8Array[] = []
 
     for (let batchStart = 0; batchStart < totalChunks; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, totalChunks)
@@ -44,34 +44,45 @@ serve(async (req) => {
             .from('videos')
             .download(chunkPath)
             .then(async ({ data, error }) => {
-              if (error) throw error
-              const arrayBuffer = await data.arrayBuffer()
-              return new Uint8Array(arrayBuffer)
+              if (error) {
+                console.error(`Error downloading chunk ${i}:`, error)
+                throw error
+              }
+              return new Uint8Array(await data.arrayBuffer())
             })
         )
       }
 
-      const batchChunks = await Promise.all(batchPromises)
-      for (const chunk of batchChunks) {
-        totalSize += chunk.length
-        finalChunks.push(chunk)
+      try {
+        const batchChunks = await Promise.all(batchPromises)
+        for (const chunk of batchChunks) {
+          combinedSize += chunk.length
+          chunks.push(chunk)
+        }
+      } catch (error) {
+        console.error('Error processing batch:', error)
+        throw error
       }
 
-      // Free up memory after each batch
+      // Add a delay between batches to allow for garbage collection
       if (batchEnd < totalChunks) {
-        await new Promise(resolve => setTimeout(resolve, 100)) // Small delay to allow GC
+        console.log('Pausing between batches for memory cleanup...')
+        await new Promise(resolve => setTimeout(resolve, 1000))
       }
     }
 
     console.log('All chunks downloaded, combining...')
 
     // Combine chunks efficiently
-    const combinedArray = new Uint8Array(totalSize)
+    const combinedArray = new Uint8Array(combinedSize)
     let offset = 0
-    for (const chunk of finalChunks) {
+    for (const chunk of chunks) {
       combinedArray.set(chunk, offset)
       offset += chunk.length
+      // Clear reference to help with garbage collection
+      chunk.fill(0)
     }
+    chunks.length = 0 // Clear array to help with garbage collection
 
     console.log('Uploading combined file...')
 
@@ -93,9 +104,13 @@ serve(async (req) => {
     // Clean up chunks in batches
     for (let i = 0; i < totalChunks; i++) {
       const chunkPath = `${filePath}_part${i}`
-      await supabase.storage
+      const { error: deleteError } = await supabase.storage
         .from('videos')
         .remove([chunkPath])
+      
+      if (deleteError) {
+        console.error(`Error deleting chunk ${i}:`, deleteError)
+      }
     }
 
     console.log('Process completed successfully')
@@ -107,7 +122,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in combine-video-chunks:', error)
     return new Response(
-      JSON.stringify({ error: 'Failed to combine chunks', details: error.message }),
+      JSON.stringify({ 
+        error: 'Failed to combine chunks', 
+        details: error.message,
+        code: 'PROCESSING_ERROR'
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
