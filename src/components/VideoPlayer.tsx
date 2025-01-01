@@ -23,13 +23,14 @@ const VideoPlayer = ({
   useEffect(() => {
     const getSignedUrl = async () => {
       try {
-        // Extract just the file path after /videos/
-        const matches = videoUrl.match(/\/videos\/([^?#]+)/);
-        const filePath = matches ? matches[1] : null;
-        
-        if (!filePath) {
-          throw new Error('Invalid video URL format');
+        if (!videoUrl) {
+          console.error('No video URL provided');
+          return;
         }
+
+        // Extract the bucket path from the full URL
+        const filePath = videoUrl.split('/').slice(2).join('/');
+        console.log('Attempting to get signed URL for path:', filePath);
 
         const { data, error } = await supabase.storage
           .from('videos')
@@ -46,6 +47,7 @@ const VideoPlayer = ({
         }
 
         if (data?.signedUrl) {
+          console.log('Successfully got signed URL');
           setSignedUrl(data.signedUrl);
         }
       } catch (error) {
