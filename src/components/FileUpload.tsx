@@ -1,6 +1,6 @@
 import { Upload } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { useFileUpload } from "@/hooks/useFileUpload";
+import { useVideoUpload } from "@/hooks/useVideoUpload";
 import FileUploadProgress from "./FileUploadProgress";
 
 interface FileUploadProps {
@@ -14,7 +14,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
     uploadProgress,
     uploadFile,
     setIsUploading
-  } = useFileUpload(onFileSelect);
+  } = useVideoUpload(onFileSelect);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

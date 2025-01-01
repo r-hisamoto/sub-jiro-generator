@@ -30,6 +30,45 @@ export type Database = {
         }
         Relationships: []
       }
+      upload_jobs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          filename: string
+          id: string
+          status: string
+          total_chunks: number
+          total_size: number
+          updated_at: string
+          uploaded_chunks: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          filename: string
+          id?: string
+          status: string
+          total_chunks: number
+          total_size: number
+          updated_at?: string
+          uploaded_chunks?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          filename?: string
+          id?: string
+          status?: string
+          total_chunks?: number
+          total_size?: number
+          updated_at?: string
+          uploaded_chunks?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       video_uploads: {
         Row: {
           chunks_total: number
