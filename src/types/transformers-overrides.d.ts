@@ -28,3 +28,6 @@ declare module "@huggingface/transformers" {
     options?: TranscriberOptions
   ): Promise<T>;
 }
+
+// Export the TranscriberOptions type so it can be imported elsewhere
+export type { TranscriberOptions };
