@@ -30,6 +30,54 @@ export type Database = {
         }
         Relationships: []
       }
+      video_uploads: {
+        Row: {
+          chunks_total: number
+          content_type: string
+          created_at: string | null
+          error_details: string | null
+          file_path: string
+          id: string
+          original_name: string
+          processed_at: string | null
+          processed_file_path: string | null
+          size: number
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          chunks_total: number
+          content_type: string
+          created_at?: string | null
+          error_details?: string | null
+          file_path: string
+          id?: string
+          original_name: string
+          processed_at?: string | null
+          processed_file_path?: string | null
+          size: number
+          status: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          chunks_total?: number
+          content_type?: string
+          created_at?: string | null
+          error_details?: string | null
+          file_path?: string
+          id?: string
+          original_name?: string
+          processed_at?: string | null
+          processed_file_path?: string | null
+          size?: number
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       videos: {
         Row: {
           content_type: string | null

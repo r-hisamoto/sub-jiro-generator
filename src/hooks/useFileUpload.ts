@@ -80,16 +80,16 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
         });
       }
 
-      // Initialize upload metadata
-      const { error: metadataError } = await supabase.from('video_uploads').insert({
-        file_path: finalFileName,
-        original_name: file.name,
-        content_type: file.type,
-        size: file.size,
-        chunks_total: totalChunks,
-        status: 'uploading',
-        user_id: session.user.id
-      });
+      // Initialize metadata in videos table
+      const { error: metadataError } = await supabase
+        .from('videos')
+        .insert({
+          title: file.name,
+          file_path: finalFileName,
+          content_type: file.type,
+          size: file.size,
+          user_id: session.user.id
+        });
 
       if (metadataError) throw metadataError;
 
@@ -127,15 +127,6 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
 
       if (finalizeError) throw finalizeError;
 
-      // Update metadata
-      await supabase
-        .from('video_uploads')
-        .update({ 
-          status: 'completed',
-          processed_at: new Date().toISOString()
-        })
-        .eq('file_path', finalFileName);
-
       setUploadProgress(prev => ({ ...prev, status: 'completed' }));
 
       const { data } = supabase.storage
@@ -149,16 +140,6 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
       return data.publicUrl;
     } catch (error) {
       setUploadProgress(prev => ({ ...prev, status: 'error' }));
-
-      // Update error status in database
-      await supabase
-        .from('video_uploads')
-        .update({ 
-          status: 'error',
-          error_details: error instanceof Error ? error.message : 'Unknown error'
-        })
-        .eq('file_path', finalFileName);
-
       throw error;
     } finally {
       // Cleanup temporary chunks
