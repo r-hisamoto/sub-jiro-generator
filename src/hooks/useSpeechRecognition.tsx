@@ -9,6 +9,13 @@ interface TranscriberOptions {
   quantized: boolean;
   progressCallback: (progress: number) => void;
   config: {
+    model_type: string;
+    is_encoder_decoder: boolean;
+    max_position_embeddings: number;
+    "transformers.js_config": {
+      task: string;
+    };
+    normalized_config: boolean;
     useCache: boolean;
     allowRemoteModels: boolean;
   };
@@ -22,7 +29,7 @@ interface TranscriberOptions {
   language: "ja";
   task: "transcribe" | "translate";
   returnTimestamps: boolean;
-  timestampGranularity: "word" | "char";
+  timestampGranularity: "word" | "segment";
 }
 
 const MODEL_ID = "onnx-community/whisper-small-ja";
@@ -36,6 +43,13 @@ const getPipelineOptions = (token: string | undefined): TranscriberOptions => ({
     console.log(`Model loading progress: ${progress * 100}%`);
   },
   config: {
+    model_type: "whisper",
+    is_encoder_decoder: true,
+    max_position_embeddings: 1500,
+    "transformers.js_config": {
+      task: "automatic-speech-recognition"
+    },
+    normalized_config: true,
     useCache: true,
     allowRemoteModels: true
   },
