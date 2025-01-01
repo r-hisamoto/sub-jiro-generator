@@ -1,43 +1,62 @@
-import { useState } from "react";
+import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks (Supabase recommended size)
+const CHUNK_SIZE = 100 * 1024 * 1024; // 100MB chunks for Pro plan
+const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB (Pro plan limit)
+const MAX_RETRIES = 3;
+const CONCURRENT_UPLOADS = 3;
 
 interface UploadProgress {
-  loaded: number;
-  total: number;
+  bytesUploaded: number;
+  totalBytes: number;
+  percentage: number;
+  currentChunk: number;
+  totalChunks: number;
+  status: 'preparing' | 'uploading' | 'processing' | 'completed' | 'error';
 }
 
 export const useFileUpload = (onFileSelect: (result: { file: File; url: string }) => void) => {
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
+    bytesUploaded: 0,
+    totalBytes: 0,
+    percentage: 0,
+    currentChunk: 0,
+    totalChunks: 0,
+    status: 'preparing'
+  });
 
   const uploadChunk = async (
     chunk: Blob,
     fileName: string,
-    partNumber: number,
-    contentType: string
+    attempt = 1
   ): Promise<void> => {
-    const chunkName = `${fileName}.part${partNumber}`;
-    
-    const { error } = await supabase.storage
-      .from('videos')
-      .upload(chunkName, chunk, {
-        contentType,
-        upsert: true
-      });
+    try {
+      const { error } = await supabase.storage
+        .from('videos')
+        .upload(fileName, chunk, {
+          upsert: true,
+          contentType: 'application/octet-stream'
+        });
 
-    if (error) {
-      console.error('Chunk upload error:', error);
-      throw new Error(`Failed to upload chunk ${partNumber}: ${error.message}`);
+      if (error) throw error;
+    } catch (error) {
+      if (attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        return uploadChunk(chunk, fileName, attempt + 1);
+      }
+      throw error;
     }
   };
 
   const uploadFile = async (file: File): Promise<string> => {
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error(`File size exceeds the maximum limit of 5GB`);
+    }
+
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
     if (sessionError || !session) {
-      throw new Error('ログインが必要です。');
+      throw new Error('Authentication required');
     }
 
     const fileExt = file.name.split('.').pop();
@@ -45,26 +64,60 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
     const finalFileName = `${baseFileName}.${fileExt}`;
 
     try {
-      // Split file into chunks
-      const chunks: Blob[] = [];
-      let offset = 0;
-      while (offset < file.size) {
-        chunks.push(file.slice(offset, offset + CHUNK_SIZE));
-        offset += CHUNK_SIZE;
+      setUploadProgress(prev => ({ ...prev, status: 'preparing' }));
+
+      // Calculate total chunks
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      const chunks: { index: number; blob: Blob }[] = [];
+
+      // Prepare chunks
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        chunks.push({
+          index: i,
+          blob: file.slice(start, end)
+        });
       }
 
-      // Upload chunks sequentially
-      let bytesUploaded = 0;
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        await uploadChunk(chunk, baseFileName, i, file.type);
-        
-        bytesUploaded += chunk.size;
-        const progress = (bytesUploaded / file.size) * 100;
-        setUploadProgress(progress);
+      // Initialize upload metadata
+      const { error: metadataError } = await supabase.from('video_uploads').insert({
+        file_path: finalFileName,
+        original_name: file.name,
+        content_type: file.type,
+        size: file.size,
+        chunks_total: totalChunks,
+        status: 'uploading',
+        user_id: session.user.id
+      });
+
+      if (metadataError) throw metadataError;
+
+      setUploadProgress(prev => ({ 
+        ...prev, 
+        totalBytes: file.size,
+        totalChunks,
+        status: 'uploading'
+      }));
+
+      // Upload chunks in parallel with concurrency control
+      const chunksArray = [...chunks];
+      while (chunksArray.length > 0) {
+        const batch = chunksArray.splice(0, CONCURRENT_UPLOADS);
+        await Promise.all(batch.map(async ({ index, blob }) => {
+          const chunkFileName = `${baseFileName}_${index}`;
+          await uploadChunk(blob, chunkFileName);
+
+          setUploadProgress(prev => ({
+            ...prev,
+            bytesUploaded: prev.bytesUploaded + blob.size,
+            percentage: ((prev.bytesUploaded + blob.size) / prev.totalBytes) * 100,
+            currentChunk: prev.currentChunk + 1
+          }));
+        }));
       }
 
-      // Upload final complete file
+      // Upload final file
       const { error: finalizeError } = await supabase.storage
         .from('videos')
         .upload(finalFileName, file, {
@@ -72,36 +125,18 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
           contentType: file.type
         });
 
-      if (finalizeError) {
-        throw finalizeError;
-      }
+      if (finalizeError) throw finalizeError;
 
-      // Save metadata to database
-      const { error: dbError } = await supabase.from('videos').insert({
-        title: file.name,
-        file_path: finalFileName,
-        content_type: file.type,
-        size: file.size,
-        user_id: session.user.id
-      });
+      // Update metadata
+      await supabase
+        .from('video_uploads')
+        .update({ 
+          status: 'completed',
+          processed_at: new Date().toISOString()
+        })
+        .eq('file_path', finalFileName);
 
-      if (dbError) {
-        throw dbError;
-      }
-
-      // Clean up chunk files
-      try {
-        await Promise.all(
-          chunks.map((_, i) =>
-            supabase.storage
-              .from('videos')
-              .remove([`${baseFileName}.part${i}`])
-          )
-        );
-      } catch (cleanupError) {
-        console.warn('Chunk cleanup warning:', cleanupError);
-        // Continue execution even if cleanup fails
-      }
+      setUploadProgress(prev => ({ ...prev, status: 'completed' }));
 
       const { data } = supabase.storage
         .from('videos')
@@ -113,16 +148,30 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
 
       return data.publicUrl;
     } catch (error) {
-      console.error('Upload process error:', error);
-      // Attempt to clean up the final file on error
-      try {
-        await supabase.storage
-          .from('videos')
-          .remove([finalFileName]);
-      } catch (cleanupError) {
-        console.error('Cleanup error:', cleanupError);
-      }
+      setUploadProgress(prev => ({ ...prev, status: 'error' }));
+
+      // Update error status in database
+      await supabase
+        .from('video_uploads')
+        .update({ 
+          status: 'error',
+          error_details: error instanceof Error ? error.message : 'Unknown error'
+        })
+        .eq('file_path', finalFileName);
+
       throw error;
+    } finally {
+      // Cleanup temporary chunks
+      const cleanupPromises = Array(uploadProgress.totalChunks)
+        .fill(0)
+        .map((_, i) => 
+          supabase.storage
+            .from('videos')
+            .remove([`${baseFileName}_${i}`])
+            .catch(console.warn)
+        );
+      
+      await Promise.all(cleanupPromises);
     }
   };
 
