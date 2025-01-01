@@ -1,7 +1,13 @@
 import { useState } from "react";
-import { pipeline } from "@xenova/transformers";
+import { pipeline, env } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+
+// Configure environment
+env.allowLocalModels = false;
+env.backends.onnx.wasm.numThreads = 4;
+
+const MODEL_ID = "onnx-community/whisper-small-ja";
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -23,13 +29,19 @@ export const useSpeechRecognition = () => {
       const device = navigator.gpu ? "webgpu" : "cpu";
       console.log(`Using device: ${device}`);
 
+      // Initialize transcriber with improved configuration
       const transcriber = await pipeline(
         "automatic-speech-recognition",
-        "onnx-community/whisper-small-ja",
+        MODEL_ID,
         {
           device,
           revision: "main",
           quantized: device === "cpu",
+          cache_dir: "./models",
+          local_files_only: false,
+          progress_callback: (progress: number) => {
+            console.log(`Model loading progress: ${progress * 100}%`);
+          },
           fetchOptions: {
             headers: {
               Authorization: `Bearer ${data.secret}`
@@ -41,11 +53,16 @@ export const useSpeechRecognition = () => {
         // WebGPU初期化失敗時はCPUにフォールバック
         return pipeline(
           "automatic-speech-recognition",
-          "onnx-community/whisper-small-ja",
+          MODEL_ID,
           {
             device: "cpu",
             revision: "main",
             quantized: true,
+            cache_dir: "./models",
+            local_files_only: false,
+            progress_callback: (progress: number) => {
+              console.log(`Model loading progress (CPU): ${progress * 100}%`);
+            },
             fetchOptions: {
               headers: {
                 Authorization: `Bearer ${data.secret}`
@@ -65,6 +82,7 @@ export const useSpeechRecognition = () => {
         task: "transcribe",
         chunk_length_s: 30,
         stride_length_s: 5,
+        return_timestamps: true,
       });
       
       toast({
