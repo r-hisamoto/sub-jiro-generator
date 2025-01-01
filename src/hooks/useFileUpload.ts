@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import * as tus from "tus-js-client";
 
 interface UploadResult {
   file: File;
@@ -21,87 +22,103 @@ export const useFileUpload = (onFileSelect: (result: UploadResult) => void) => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
-      console.log('Starting file upload:', {
+      // Use TUS for files larger than 6MB
+      if (file.size > 6 * 1024 * 1024) {
+        return await uploadWithTUS(file, fileName, user.id);
+      }
+
+      // Use standard upload for smaller files
+      console.log('Starting standard file upload:', {
         fileName,
         fileSize: file.size,
         fileType: file.type
       });
 
-      // Get a pre-signed URL for upload
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      const { data, error: uploadError } = await supabase.storage
         .from('videos')
-        .createSignedUploadUrl(fileName);
+        .upload(fileName, file, {
+          contentType: file.type,
+          upsert: false
+        });
 
-      if (signedUrlError) {
-        console.error('Signed URL error:', signedUrlError);
-        throw signedUrlError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
       }
 
-      // Upload using XMLHttpRequest for progress tracking
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', signedUrlData.signedUrl, true);
-        
-        // Set the Content-Type header to match the file's MIME type
-        xhr.setRequestHeader('Content-Type', file.type);
-        
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable) {
-            const percent = (event.loaded / event.total) * 100;
-            setUploadProgress(Math.min(percent, 95));
-          }
-        });
-
-        xhr.addEventListener('load', async () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              // Save video metadata to the database
-              const { error: dbError } = await supabase.from('videos').insert({
-                title: file.name,
-                file_path: fileName,
-                content_type: file.type,
-                size: file.size,
-                user_id: user.id
-              });
-
-              if (dbError) {
-                console.error('Database insert error:', dbError);
-                reject(dbError);
-                return;
-              }
-
-              setUploadProgress(100);
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          } else {
-            console.error('Upload failed with status:', xhr.status);
-            console.error('Response:', xhr.responseText);
-            reject(new Error(`Upload failed with status ${xhr.status}`));
-          }
-        });
-
-        xhr.addEventListener('error', () => {
-          console.error('XHR error:', xhr.statusText);
-          reject(new Error('Upload failed'));
-        });
-
-        xhr.send(file);
-      });
-
-      // Get the public URL after successful upload
       const { data: { publicUrl } } = supabase.storage
         .from('videos')
         .getPublicUrl(fileName);
-
-      console.log('File upload completed:', { publicUrl });
 
       return publicUrl;
     } catch (error) {
       console.error('Upload process error:', error);
       throw error;
     }
+  };
+
+  const uploadWithTUS = (file: File, fileName: string, userId: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const upload = new tus.Upload(file, {
+        endpoint: `https://xwimlzbnnuleqylnekoy.supabase.co/storage/v1/upload/resumable`,
+        retryDelays: [0, 3000, 5000, 10000, 20000],
+        headers: {
+          'x-upsert': 'true',
+        },
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        metadata: {
+          bucketName: 'videos',
+          objectName: fileName,
+          contentType: file.type,
+          cacheControl: '3600',
+        },
+        chunkSize: 6 * 1024 * 1024, // 6MB chunks as required by Supabase
+        onError: (error) => {
+          console.error('TUS upload failed:', error);
+          reject(error);
+        },
+        onProgress: (bytesUploaded, bytesTotal) => {
+          const percentage = (bytesUploaded / bytesTotal) * 100;
+          setUploadProgress(Math.min(percentage, 95));
+        },
+        onSuccess: async () => {
+          try {
+            // Save video metadata to the database
+            const { error: dbError } = await supabase.from('videos').insert({
+              title: file.name,
+              file_path: fileName,
+              content_type: file.type,
+              size: file.size,
+              user_id: userId
+            });
+
+            if (dbError) {
+              console.error('Database insert error:', dbError);
+              reject(dbError);
+              return;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('videos')
+              .getPublicUrl(fileName);
+
+            setUploadProgress(100);
+            resolve(publicUrl);
+          } catch (error) {
+            reject(error);
+          }
+        },
+      });
+
+      // Check for previous uploads to resume
+      upload.findPreviousUploads().then((previousUploads) => {
+        if (previousUploads.length) {
+          upload.resumeFromPreviousUpload(previousUploads[0]);
+        }
+        upload.start();
+      });
+    });
   };
 
   return {
