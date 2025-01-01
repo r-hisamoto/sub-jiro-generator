@@ -1,13 +1,18 @@
 import { useState } from "react";
-import { pipeline, env } from "@huggingface/transformers";
+import { pipeline, environment } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-// Configure environment
-env.allowLocalModels = false;
-env.backends.onnx.wasm.numThreads = 4;
-
 const MODEL_ID = "onnx-community/whisper-small-ja";
+
+// Configure environment
+environment.backendConfigs = {
+  webgpu: { numThreads: 4 },
+  wasm: { numThreads: 4 }
+};
+environment.useCache = true;
+environment.cacheDir = "./models";
+environment.allowRemoteModels = true;
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -29,7 +34,6 @@ export const useSpeechRecognition = () => {
       const device = navigator.gpu ? "webgpu" : "cpu";
       console.log(`Using device: ${device}`);
 
-      // Initialize transcriber with improved configuration
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         MODEL_ID,
@@ -37,16 +41,26 @@ export const useSpeechRecognition = () => {
           device,
           revision: "main",
           quantized: device === "cpu",
-          cache_dir: "./models",
-          local_files_only: false,
-          progress_callback: (progress: number) => {
+          progressCallback: (progress: number) => {
             console.log(`Model loading progress: ${progress * 100}%`);
+          },
+          config: {
+            useCache: true,
+            cacheDir: "./models",
+            allowRemoteModels: true
           },
           fetchOptions: {
             headers: {
               Authorization: `Bearer ${data.secret}`
             }
-          }
+          },
+          // Whisper specific options
+          chunkLength: 30,
+          strideLength: 5,
+          language: "ja",
+          task: "transcribe",
+          returnTimestamps: true,
+          timestampGranularity: "word"
         }
       ).catch((error) => {
         console.error('Failed to initialize pipeline:', error);
@@ -58,10 +72,13 @@ export const useSpeechRecognition = () => {
             device: "cpu",
             revision: "main",
             quantized: true,
-            cache_dir: "./models",
-            local_files_only: false,
-            progress_callback: (progress: number) => {
+            progressCallback: (progress: number) => {
               console.log(`Model loading progress (CPU): ${progress * 100}%`);
+            },
+            config: {
+              useCache: true,
+              cacheDir: "./models",
+              allowRemoteModels: true
             },
             fetchOptions: {
               headers: {
@@ -80,9 +97,9 @@ export const useSpeechRecognition = () => {
       const result = await transcriber(channelData, {
         language: "japanese",
         task: "transcribe",
-        chunk_length_s: 30,
-        stride_length_s: 5,
-        return_timestamps: true,
+        chunkLength: 30,
+        strideLength: 5,
+        returnTimestamps: true,
       });
       
       toast({
