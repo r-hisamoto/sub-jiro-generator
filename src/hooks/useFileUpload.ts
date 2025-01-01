@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks (Supabase recommended size)
 
 interface UploadProgress {
   loaded: number;
@@ -15,34 +15,21 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
   const uploadChunk = async (
     chunk: Blob,
     fileName: string,
-    partNumber: number
-  ): Promise<boolean> => {
-    try {
-      const { data: { signedUrl }, error: signedUrlError } = await supabase.storage
-        .from('videos')
-        .createSignedUploadUrl(`${fileName}.part${partNumber}`);
-
-      if (signedUrlError) {
-        console.error('Signed URL error:', signedUrlError);
-        throw signedUrlError;
-      }
-
-      const response = await fetch(signedUrl, {
-        method: 'PUT',
-        body: chunk,
-        headers: {
-          'Content-Type': 'application/octet-stream',
-        },
+    partNumber: number,
+    contentType: string
+  ): Promise<void> => {
+    const chunkName = `${fileName}.part${partNumber}`;
+    
+    const { error } = await supabase.storage
+      .from('videos')
+      .upload(chunkName, chunk, {
+        contentType,
+        upsert: true
       });
 
-      if (!response.ok) {
-        throw new Error(`Chunk upload failed: ${response.statusText}`);
-      }
-
-      return true;
-    } catch (error) {
-      console.error(`Chunk ${partNumber} upload failed:`, error);
-      throw error;
+    if (error) {
+      console.error('Chunk upload error:', error);
+      throw new Error(`Failed to upload chunk ${partNumber}: ${error.message}`);
     }
   };
 
@@ -53,11 +40,11 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
       throw new Error('ログインが必要です。');
     }
 
-    try {
-      const fileExt = file.name.split('.').pop();
-      const baseFileName = `${session.user.id}/${crypto.randomUUID()}`;
-      const finalFileName = `${baseFileName}.${fileExt}`;
+    const fileExt = file.name.split('.').pop();
+    const baseFileName = `${session.user.id}/${crypto.randomUUID()}`;
+    const finalFileName = `${baseFileName}.${fileExt}`;
 
+    try {
       // Split file into chunks
       const chunks: Blob[] = [];
       let offset = 0;
@@ -66,18 +53,18 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
         offset += CHUNK_SIZE;
       }
 
-      // Upload chunks with progress tracking
+      // Upload chunks sequentially
       let bytesUploaded = 0;
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        await uploadChunk(chunk, baseFileName, i);
+        await uploadChunk(chunk, baseFileName, i, file.type);
         
         bytesUploaded += chunk.size;
         const progress = (bytesUploaded / file.size) * 100;
         setUploadProgress(progress);
       }
 
-      // Combine chunks into final file
+      // Upload final complete file
       const { error: finalizeError } = await supabase.storage
         .from('videos')
         .upload(finalFileName, file, {
@@ -103,21 +90,38 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
       }
 
       // Clean up chunk files
-      await Promise.all(
-        chunks.map((_, i) =>
-          supabase.storage
-            .from('videos')
-            .remove([`${baseFileName}.part${i}`])
-        )
-      );
+      try {
+        await Promise.all(
+          chunks.map((_, i) =>
+            supabase.storage
+              .from('videos')
+              .remove([`${baseFileName}.part${i}`])
+          )
+        );
+      } catch (cleanupError) {
+        console.warn('Chunk cleanup warning:', cleanupError);
+        // Continue execution even if cleanup fails
+      }
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data } = supabase.storage
         .from('videos')
         .getPublicUrl(finalFileName);
 
-      return publicUrl;
+      if (!data?.publicUrl) {
+        throw new Error('Failed to get public URL');
+      }
+
+      return data.publicUrl;
     } catch (error) {
       console.error('Upload process error:', error);
+      // Attempt to clean up the final file on error
+      try {
+        await supabase.storage
+          .from('videos')
+          .remove([finalFileName]);
+      } catch (cleanupError) {
+        console.error('Cleanup error:', cleanupError);
+      }
       throw error;
     }
   };
