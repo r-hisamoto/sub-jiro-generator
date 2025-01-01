@@ -5,17 +5,33 @@ import { supabase } from "@/integrations/supabase/client";
 
 const MODEL_ID = "onnx-community/whisper-small-ja";
 
-// Configure environment
-const config = {
-  backendConfigs: {
-    webgl: { numThreads: 4 },
-    wasm: { numThreads: 4 },
-    webgpu: { numThreads: 4 }
+// Configure pipeline options
+const getPipelineOptions = (token: string | undefined) => ({
+  device: "webgpu",
+  revision: "main",
+  quantized: true,
+  progressCallback: (progress: number) => {
+    console.log(`Model loading progress: ${progress * 100}%`);
   },
-  useCache: true,
-  cacheDir: "./models",
-  allowRemoteModels: true
-};
+  config: {
+    useCache: true,
+    allowRemoteModels: true
+  },
+  ...(token && {
+    fetchOptions: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  }),
+  // Whisper specific options
+  chunkLength: 30,
+  strideLength: 5,
+  language: "ja",
+  task: "transcribe",
+  returnTimestamps: true,
+  timestampGranularity: "word"
+});
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -40,31 +56,7 @@ export const useSpeechRecognition = () => {
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         MODEL_ID,
-        {
-          device,
-          revision: "main",
-          quantized: device === "cpu",
-          progressCallback: (progress: number) => {
-            console.log(`Model loading progress: ${progress * 100}%`);
-          },
-          config: {
-            useCache: true,
-            cacheDir: "./models",
-            allowRemoteModels: true
-          },
-          fetchOptions: {
-            headers: {
-              Authorization: `Bearer ${data.secret}`
-            }
-          },
-          // Whisper specific options
-          chunkLength: 30,
-          strideLength: 5,
-          language: "ja",
-          task: "transcribe",
-          returnTimestamps: true,
-          timestampGranularity: "word"
-        }
+        getPipelineOptions(data.secret)
       ).catch((error) => {
         console.error('Failed to initialize pipeline:', error);
         // WebGPU初期化失敗時はCPUにフォールバック
@@ -72,22 +64,8 @@ export const useSpeechRecognition = () => {
           "automatic-speech-recognition",
           MODEL_ID,
           {
-            device: "cpu",
-            revision: "main",
-            quantized: true,
-            progressCallback: (progress: number) => {
-              console.log(`Model loading progress (CPU): ${progress * 100}%`);
-            },
-            config: {
-              useCache: true,
-              cacheDir: "./models",
-              allowRemoteModels: true
-            },
-            fetchOptions: {
-              headers: {
-                Authorization: `Bearer ${data.secret}`
-              }
-            }
+            ...getPipelineOptions(data.secret),
+            device: "cpu"
           }
         );
       });

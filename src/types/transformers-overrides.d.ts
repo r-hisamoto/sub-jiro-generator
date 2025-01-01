@@ -1,15 +1,4 @@
 declare module "@huggingface/transformers" {
-  export interface Environment {
-    backendConfigs: {
-      webgl: { numThreads?: number };
-      wasm: { numThreads?: number };
-      webgpu: { numThreads?: number };
-    };
-    useCache: boolean;
-    cacheDir?: string;
-    allowRemoteModels: boolean;
-  }
-
   export interface PretrainedModelOptions {
     device?: "cpu" | "webgl" | "webgpu" | "wasm";
     revision?: string;
@@ -17,7 +6,6 @@ declare module "@huggingface/transformers" {
     progressCallback?: (progress: number) => void;
     config?: {
       useCache?: boolean;
-      cacheDir?: string;
       allowRemoteModels?: boolean;
     };
     fetchOptions?: {
@@ -39,6 +27,4 @@ declare module "@huggingface/transformers" {
     model: string,
     options?: TranscriberOptions
   ): Promise<T>;
-
-  export const environment: Environment;
 }
