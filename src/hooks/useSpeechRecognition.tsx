@@ -5,10 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriberOptions {
   device: "cpu" | "webgl" | "webgpu" | "wasm";
-  revision: string;
-  quantized: boolean;
-  progressCallback: (progress: number) => void;
-  config: {
+  revision?: string;
+  quantized?: boolean;
+  progressCallback?: (progress: number) => void;
+  config?: {
     model_type: string;
     is_encoder_decoder: boolean;
     max_position_embeddings: number;
@@ -24,20 +24,20 @@ interface TranscriberOptions {
       Authorization: string;
     };
   };
-  chunkLength: number;
-  strideLength: number;
-  language: "ja";
-  task: "transcribe" | "translate";
-  returnTimestamps: boolean;
-  timestampGranularity: "word" | "segment";
+  chunkLength?: number;
+  strideLength?: number;
+  language?: "ja";
+  task?: "transcribe" | "translate";
+  returnTimestamps?: boolean;
+  timestampGranularity?: "word" | "segment";
 }
 
-// Using a public model that's optimized for Japanese
-const MODEL_ID = "Xenova/whisper-small.ja";
+// Using a completely public model that's optimized for Japanese
+const MODEL_ID = "Xenova/whisper-tiny.ja";
 
 // Configure pipeline options
 const getPipelineOptions = (token: string | undefined): TranscriberOptions => ({
-  device: "webgpu",
+  device: "wasm" as const, // Using wasm as it's more stable
   revision: "main",
   quantized: true,
   progressCallback: (progress: number) => {
@@ -80,37 +80,36 @@ export const useSpeechRecognition = () => {
         body: { name: 'HUGGING_FACE_ACCESS_TOKEN' }
       });
 
-      if (error || !data?.secret) {
+      if (error) {
         console.error('Failed to get Hugging Face token:', error);
-        throw new Error('Hugging Face APIトークンの取得に失敗しました。');
+        // Continue without token for public model
       }
 
-      // WebGPUのサポートチェック
-      const device = navigator.gpu ? "webgpu" as const : "wasm" as const;
-      console.log(`Using device: ${device}`);
-
+      console.log('Initializing pipeline...');
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         MODEL_ID,
-        getPipelineOptions(data.secret)
+        getPipelineOptions(data?.secret)
       ).catch((error) => {
         console.error('Failed to initialize pipeline:', error);
-        // WebGPU初期化失敗時はwasmにフォールバック
+        // Try without token if authentication fails
         return pipeline(
           "automatic-speech-recognition",
           MODEL_ID,
           {
-            ...getPipelineOptions(data.secret),
+            ...getPipelineOptions(undefined),
             device: "wasm" as const
           }
         );
       });
 
+      console.log('Converting audio file...');
       const arrayBuffer = await audioFile.arrayBuffer();
       const audioContext = new AudioContext();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       const channelData = audioBuffer.getChannelData(0);
       
+      console.log('Starting transcription...');
       const result = await transcriber(channelData, {
         language: "ja",
         task: "transcribe",
