@@ -18,20 +18,20 @@ export const useVideoUpload = () => {
     try {
       console.log(`Uploading chunk: ${chunkPath}, size: ${chunk.size / (1024 * 1024)}MB`);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Upload timeout')), UPLOAD_TIMEOUT);
+      });
 
-      const { error } = await supabase.storage
+      const uploadPromise = supabase.storage
         .from('temp-chunks')
         .upload(chunkPath, chunk, {
           upsert: true,
           contentType: 'application/octet-stream',
           cacheControl: '3600',
-          duplex: 'half',
-          signal: controller.signal
+          duplex: 'half'
         });
 
-      clearTimeout(timeoutId);
+      const { error } = await Promise.race([uploadPromise, timeoutPromise]);
 
       if (error) throw error;
       
