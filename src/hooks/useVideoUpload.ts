@@ -31,9 +31,10 @@ export const useVideoUpload = () => {
           duplex: 'half'
         });
 
-      const { error } = await Promise.race([uploadPromise, timeoutPromise]);
-
-      if (error) throw error;
+      const result = await Promise.race([uploadPromise, timeoutPromise]);
+      
+      // Since result could be from either promise, we need to check if it's from uploadPromise
+      if ('error' in result && result.error) throw result.error;
       
       console.log(`Successfully uploaded chunk: ${chunkPath}`);
     } catch (error) {
