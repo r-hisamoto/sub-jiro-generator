@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { pipeline } from "@huggingface/transformers";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriberOptions {
@@ -36,7 +36,7 @@ interface TranscriberOptions {
 const MODEL_ID = "Xenova/whisper-tiny.ja";
 
 // Configure pipeline options
-const getPipelineOptions = (token: string | undefined): TranscriberOptions => ({
+const getPipelineOptions = (token: string): TranscriberOptions => ({
   device: "wasm" as const, // Using wasm as it's more stable
   revision: "main",
   quantized: true,
@@ -54,13 +54,11 @@ const getPipelineOptions = (token: string | undefined): TranscriberOptions => ({
     useCache: true,
     allowRemoteModels: true
   },
-  ...(token && {
-    fetchOptions: {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  fetchOptions: {
+    headers: {
+      Authorization: `Bearer ${token}`
     }
-  }),
+  },
   chunkLength: 30,
   strideLength: 5,
   language: "ja",
@@ -80,28 +78,17 @@ export const useSpeechRecognition = () => {
         body: { name: 'HUGGING_FACE_ACCESS_TOKEN' }
       });
 
-      if (error) {
+      if (error || !data?.secret) {
         console.error('Failed to get Hugging Face token:', error);
-        // Continue without token for public model
+        throw new Error('Hugging Face APIトークンの取得に失敗しました。');
       }
 
-      console.log('Initializing pipeline...');
+      console.log('Initializing pipeline with token...');
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         MODEL_ID,
-        getPipelineOptions(data?.secret)
-      ).catch((error) => {
-        console.error('Failed to initialize pipeline:', error);
-        // Try without token if authentication fails
-        return pipeline(
-          "automatic-speech-recognition",
-          MODEL_ID,
-          {
-            ...getPipelineOptions(undefined),
-            device: "wasm" as const
-          }
-        );
-      });
+        getPipelineOptions(data.secret)
+      );
 
       console.log('Converting audio file...');
       const arrayBuffer = await audioFile.arrayBuffer();
