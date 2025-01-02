@@ -7,6 +7,11 @@ const MAX_CONCURRENT_UPLOADS = 10; // 並列アップロード数を10に増加
 const RETRY_DELAYS = [1000, 2000, 4000, 8000]; // リトライ間隔を指数的に増加
 const UPLOAD_TIMEOUT = 30000; // 30秒のタイムアウト
 
+interface UploadResult {
+  error: Error | null;
+  data: any;
+}
+
 export const useVideoUpload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -18,11 +23,11 @@ export const useVideoUpload = () => {
     try {
       console.log(`Uploading chunk: ${chunkPath}, size: ${chunk.size / (1024 * 1024)}MB`);
       
-      const timeoutPromise = new Promise((_, reject) => {
+      const timeoutPromise = new Promise<UploadResult>((_, reject) => {
         setTimeout(() => reject(new Error('Upload timeout')), UPLOAD_TIMEOUT);
       });
 
-      const uploadPromise = supabase.storage
+      const uploadPromise: Promise<UploadResult> = supabase.storage
         .from('temp-chunks')
         .upload(chunkPath, chunk, {
           upsert: true,
@@ -33,8 +38,9 @@ export const useVideoUpload = () => {
 
       const result = await Promise.race([uploadPromise, timeoutPromise]);
       
-      // Since result could be from either promise, we need to check if it's from uploadPromise
-      if ('error' in result && result.error) throw result.error;
+      if (result.error) {
+        throw result.error;
+      }
       
       console.log(`Successfully uploaded chunk: ${chunkPath}`);
     } catch (error) {
