@@ -13,14 +13,15 @@ export const useSpeechRecognition = () => {
       // Create automatic speech recognition pipeline
       const transcriber = await pipeline(
         "automatic-speech-recognition",
-        "openai/whisper-large-v3",
+        "Xenova/whisper-small",  // より小さく、安定したモデルに変更
         { 
           device: "webgpu",
           chunkLength: 30,
           strideLength: 5,
           language: "ja",
           task: "transcribe",
-          returnTimestamps: true
+          returnTimestamps: true,
+          quantized: true  // メモリ使用量を削減
         }
       );
 
