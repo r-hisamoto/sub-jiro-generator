@@ -15,10 +15,14 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
 
     const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg'];
     if (!allowedTypes.includes(file.type)) {
+      console.error('Invalid file type:', file.type);
       toast({
         variant: "destructive",
         title: "エラー",
@@ -37,6 +41,8 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
       });
 
       const jobId = await uploadVideo(file);
+      
+      console.log('Upload completed successfully, jobId:', jobId);
       
       toast({
         title: "成功",

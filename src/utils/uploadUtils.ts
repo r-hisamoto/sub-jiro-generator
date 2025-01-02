@@ -8,10 +8,13 @@ export const uploadChunk = async (
   retryCount = 0
 ): Promise<void> => {
   try {
-    console.log(`Uploading chunk: ${chunkPath}, size: ${chunk.size / (1024 * 1024)}MB`);
+    console.log(`Uploading chunk: ${chunkPath}, size: ${(chunk.size / (1024 * 1024)).toFixed(2)}MB`);
     
     const timeoutPromise = new Promise<UploadResult>((_, reject) => {
-      setTimeout(() => reject(new Error('Upload timeout')), UPLOAD_TIMEOUT);
+      setTimeout(() => {
+        console.error(`Upload timeout for chunk: ${chunkPath}`);
+        reject(new Error('Upload timeout'));
+      }, UPLOAD_TIMEOUT);
     });
 
     const uploadPromise: Promise<UploadResult> = supabase.storage
@@ -25,6 +28,7 @@ export const uploadChunk = async (
     const result = await Promise.race([uploadPromise, timeoutPromise]);
     
     if ('error' in result && result.error) {
+      console.error(`Error in uploadChunk for ${chunkPath}:`, result.error);
       throw result.error;
     }
     
@@ -69,11 +73,12 @@ export const createVideoJob = async (
     throw error;
   }
   
-  console.log('Video job created:', job);
+  console.log('Video job created successfully:', job);
   return job.id;
 };
 
 export const divideFileIntoChunks = (file: File, chunkSize: number): Blob[] => {
+  console.log(`Dividing file (${file.name}, ${(file.size / (1024 * 1024)).toFixed(2)}MB) into chunks of ${(chunkSize / (1024 * 1024)).toFixed(2)}MB`);
   const chunks: Blob[] = [];
   let offset = 0;
   while (offset < file.size) {
@@ -81,5 +86,6 @@ export const divideFileIntoChunks = (file: File, chunkSize: number): Blob[] => {
     chunks.push(chunk);
     offset += chunkSize;
   }
+  console.log(`Created ${chunks.length} chunks`);
   return chunks;
 };

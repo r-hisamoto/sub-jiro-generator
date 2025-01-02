@@ -15,7 +15,10 @@ export const useVideoUpload = () => {
     });
 
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('Authentication required');
+    if (!session) {
+      console.error('Authentication error: No active session found');
+      throw new Error('Authentication required');
+    }
 
     const userId = session.user.id;
     const fileId = crypto.randomUUID();
@@ -23,9 +26,12 @@ export const useVideoUpload = () => {
     let jobId: string;
 
     try {
+      console.log('Creating video job for path:', uploadPath);
       jobId = await createVideoJob(file.name, file.size, uploadPath, userId);
+      
+      console.log('Dividing file into chunks...');
       const chunks = divideFileIntoChunks(file, CHUNK_SIZE);
-      console.log(`Divided file into ${chunks.length} chunks`);
+      console.log(`File divided into ${chunks.length} chunks`);
 
       const uploadQueue = [...chunks];
       const activeUploads = new Set<Promise<void>>();
@@ -37,15 +43,19 @@ export const useVideoUpload = () => {
           const chunkIndex = chunks.indexOf(chunk);
           const chunkPath = `${uploadPath}/chunk_${chunkIndex}`;
           
+          console.log(`Starting upload of chunk ${chunkIndex + 1}/${chunks.length}`);
+          
           const uploadPromise = uploadChunk(chunk, chunkPath)
             .then(() => {
               completedChunks++;
               const progress = Math.min((completedChunks / chunks.length) * 100, 100);
+              console.log(`Chunk ${chunkIndex + 1} uploaded successfully. Progress: ${progress}%`);
               setUploadProgress(progress);
               activeUploads.delete(uploadPromise);
             })
             .catch((error) => {
               console.error(`Failed to upload chunk ${chunkIndex}:`, error);
+              console.log('Retrying chunk upload...');
               uploadQueue.unshift(chunk);
               activeUploads.delete(uploadPromise);
             });
@@ -57,6 +67,8 @@ export const useVideoUpload = () => {
           await Promise.race([...activeUploads]);
         }
       }
+
+      console.log('All chunks uploaded successfully. Enqueueing video processing...');
 
       const { error: queueError } = await supabase.functions.invoke('enqueue-video-processing', {
         body: {
@@ -71,7 +83,10 @@ export const useVideoUpload = () => {
         }
       });
 
-      if (queueError) throw queueError;
+      if (queueError) {
+        console.error('Failed to enqueue video processing:', queueError);
+        throw queueError;
+      }
 
       console.log('Video upload completed successfully');
       return jobId;
@@ -79,6 +94,7 @@ export const useVideoUpload = () => {
       console.error('Upload failed:', error);
       
       if (jobId) {
+        console.log('Updating job status to failed...');
         await supabase
           .from('video_jobs')
           .update({ 
