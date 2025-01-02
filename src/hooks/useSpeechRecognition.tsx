@@ -1,85 +1,6 @@
 import { useState } from "react";
-import { pipeline } from "@huggingface/transformers";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-
-interface TranscriberOptions {
-  device: "cpu" | "webgl" | "webgpu" | "wasm";
-  revision?: string;
-  quantized?: boolean;
-  progressCallback?: (progress: number) => void;
-  config?: {
-    model_type: string;
-    is_encoder_decoder: boolean;
-    max_position_embeddings: number;
-    "transformers.js_config": {
-      task: string;
-    };
-    normalized_config: boolean;
-    useCache: boolean;
-    allowRemoteModels: boolean;
-  };
-  fetchOptions?: {
-    headers: {
-      Authorization: string;
-    };
-  };
-  chunkLength?: number;
-  strideLength?: number;
-  language?: "ja";
-  task?: "transcribe" | "translate";
-  returnTimestamps?: boolean;
-  timestampGranularity?: "word" | "segment";
-}
-
-// Using the official Whisper small model instead
-const MODEL_ID = "openai/whisper-small";
-
-// Configure pipeline options
-const getPipelineOptions = async (): Promise<TranscriberOptions> => {
-  // Get the Hugging Face access token from Supabase Edge Function
-  const { data: { token }, error } = await supabase.functions.invoke('get-secret', {
-    body: { key: 'HUGGING_FACE_ACCESS_TOKEN' }
-  });
-
-  if (error || !token) {
-    console.error('Failed to get Hugging Face access token:', error);
-    throw new Error('Failed to get Hugging Face access token');
-  }
-
-  console.log('Got Hugging Face access token');
-
-  return {
-    device: "wasm",
-    revision: "main",
-    quantized: true,
-    progressCallback: (progress: number) => {
-      console.log(`Model loading progress: ${progress * 100}%`);
-    },
-    config: {
-      model_type: "whisper",
-      is_encoder_decoder: true,
-      max_position_embeddings: 1500,
-      "transformers.js_config": {
-        task: "automatic-speech-recognition"
-      },
-      normalized_config: true,
-      useCache: true,
-      allowRemoteModels: true
-    },
-    fetchOptions: {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    },
-    chunkLength: 30,
-    strideLength: 5,
-    language: "ja",
-    task: "transcribe",
-    returnTimestamps: true,
-    timestampGranularity: "word"
-  };
-};
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -88,38 +9,47 @@ export const useSpeechRecognition = () => {
   const transcribeAudio = async (audioFile: File) => {
     setIsProcessing(true);
     try {
-      console.log('Initializing pipeline...');
-      const options = await getPipelineOptions();
-      console.log('Pipeline options configured');
-      
-      const transcriber = await pipeline(
-        "automatic-speech-recognition",
-        MODEL_ID,
-        options
-      );
+      console.log('Getting OpenAI API key...');
+      const { data: { token }, error: secretError } = await supabase.functions.invoke('get-secret', {
+        body: { key: 'OPENAI_API_KEY' }
+      });
+
+      if (secretError || !token) {
+        console.error('Failed to get OpenAI API key:', secretError);
+        throw new Error('OpenAI APIキーの取得に失敗しました');
+      }
 
       console.log('Converting audio file...');
-      const arrayBuffer = await audioFile.arrayBuffer();
-      const audioContext = new AudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      const channelData = audioBuffer.getChannelData(0);
-      
-      console.log('Starting transcription...');
-      const result = await transcriber(channelData, {
-        language: "ja",
-        task: "transcribe",
-        chunkLength: 30,
-        strideLength: 5,
-        returnTimestamps: true,
+      const formData = new FormData();
+      formData.append('file', audioFile);
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'ja');
+      formData.append('response_format', 'json');
+
+      console.log('Sending request to OpenAI Whisper API...');
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Whisper API error:', error);
+        throw new Error('音声認識に失敗しました');
+      }
+
+      const result = await response.json();
+      console.log('Transcription completed successfully');
       
       toast({
         title: "音声認識完了",
-        description: "字幕の生成が完了しました",
+        description: "テキストの生成が完了しました",
       });
 
-      const text = Array.isArray(result) ? result[0].text : result.text;
-      return text;
+      return result.text;
     } catch (error) {
       console.error("音声認識エラー:", error);
       toast({
