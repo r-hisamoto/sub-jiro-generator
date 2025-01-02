@@ -80,7 +80,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
             <span className="font-semibold">クリックして動画をアップロード</span>
             {" "}または動画をドラッグ＆ドロップ
           </p>
-          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大100MB)</p>
+          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大10GB)</p>
         </div>
         <input
           type="file"
