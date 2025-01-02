@@ -38,7 +38,7 @@ export const uploadChunk = async (
     
     if (retryCount < RETRY_DELAYS.length) {
       const delay = RETRY_DELAYS[retryCount];
-      console.log(`Retrying chunk upload after ${delay}ms (attempt ${retryCount + 1})`);
+      console.log(`Retrying chunk upload after ${delay}ms (attempt ${retryCount + 1}/${RETRY_DELAYS.length})`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return uploadChunk(chunk, chunkPath, retryCount + 1);
     }
