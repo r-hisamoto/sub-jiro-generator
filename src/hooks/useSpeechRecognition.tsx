@@ -47,8 +47,10 @@ const getPipelineOptions = async (): Promise<TranscriberOptions> => {
     throw new Error('Failed to get Hugging Face access token');
   }
 
+  console.log('Got Hugging Face access token');
+
   return {
-    device: "wasm" as const,
+    device: "wasm",
     revision: "main",
     quantized: true,
     progressCallback: (progress: number) => {
@@ -88,6 +90,8 @@ export const useSpeechRecognition = () => {
     try {
       console.log('Initializing pipeline...');
       const options = await getPipelineOptions();
+      console.log('Pipeline options configured');
+      
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         MODEL_ID,
