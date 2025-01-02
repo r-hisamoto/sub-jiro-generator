@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 
-// チャンクサイズを1GBに増加
-const CHUNK_SIZE = 1024 * 1024 * 1024; // 1GB chunks
-const MAX_CONCURRENT_UPLOADS = 10; // 並列アップロード数を10に増加
+// チャンクサイズを50MBに減少（より小さなチャンクでアップロード）
+const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
+const MAX_CONCURRENT_UPLOADS = 3; // 同時アップロード数を減らして安定性を向上
 const RETRY_DELAYS = [1000, 2000, 4000, 8000]; // リトライ間隔を指数的に増加
-const UPLOAD_TIMEOUT = 30000; // 30秒のタイムアウト
+const UPLOAD_TIMEOUT = 300000; // タイムアウトを5分に延長
 
 interface UploadResult {
   error: Error | null;
@@ -32,7 +32,6 @@ export const useVideoUpload = () => {
         .upload(chunkPath, chunk, {
           upsert: true,
           contentType: 'application/octet-stream',
-          cacheControl: '3600',
           duplex: 'half'
         });
 
@@ -106,7 +105,7 @@ export const useVideoUpload = () => {
     try {
       jobId = await createVideoJob(file.name, file.size, uploadPath, userId);
 
-      // ファイルをチャンクに分割（効率的なバッファリング）
+      // ファイルをチャンクに分割
       const chunks: Blob[] = [];
       let offset = 0;
       while (offset < file.size) {
@@ -117,7 +116,7 @@ export const useVideoUpload = () => {
 
       console.log(`Divided file into ${chunks.length} chunks`);
 
-      // 並列アップロードの実装（10個まで同時実行）
+      // 並列アップロードの実装（3個まで同時実行）
       const uploadQueue = [...chunks];
       const activeUploads = new Set<Promise<void>>();
       let completedChunks = 0;
@@ -147,7 +146,7 @@ export const useVideoUpload = () => {
 
         // アクティブなアップロードの完了を待つ
         if (activeUploads.size > 0) {
-          await Promise.race(activeUploads);
+          await Promise.race([...activeUploads]);
         }
       }
 
