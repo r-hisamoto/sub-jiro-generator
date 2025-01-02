@@ -46,9 +46,9 @@ const Index = () => {
     } catch (error) {
       console.error("Transcription error:", error);
       toast({
-        title: "エラー",
-        description: "音声認識中にエラーが発生しました。もう一度お試しください。",
         variant: "destructive",
+        title: "エラー",
+        description: error instanceof Error ? error.message : "音声認識中にエラーが発生しました。もう一度お試しください。",
       });
     }
   };

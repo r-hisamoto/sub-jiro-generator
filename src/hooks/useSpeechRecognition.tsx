@@ -13,28 +13,19 @@ export const useSpeechRecognition = () => {
       formData.append('model', 'whisper-1');
       formData.append('language', 'ja');
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('temp-chunks')
-        .getPublicUrl('audio-temp.mp3');
-
-      const response = await fetch('/functions/v1/transcribe-whisper', {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke('transcribe-whisper', {
         body: formData,
-        headers: {
-          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
-        },
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Transcription failed: ${error}`);
+      if (error) {
+        console.error('Transcription error:', error);
+        throw new Error('音声認識に失敗しました');
       }
 
-      const { text } = await response.json();
-      return text;
+      return data?.text || null;
     } catch (error) {
       console.error('Transcription error:', error);
-      return null;
+      throw error;
     } finally {
       setIsProcessing(false);
     }
