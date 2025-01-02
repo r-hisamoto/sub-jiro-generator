@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { pipeline } from "@huggingface/transformers";
+import { toast } from "@/components/ui/use-toast";
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -7,29 +8,46 @@ export const useSpeechRecognition = () => {
   const transcribeAudio = async (file: File): Promise<string | null> => {
     try {
       setIsProcessing(true);
-      
-      // ファイルサイズの制限を追加（25MB）
-      if (file.size > 25 * 1024 * 1024) {
-        throw new Error('ファイルサイズが大きすぎます（上限: 25MB）');
-      }
-      
-      const formData = new FormData();
-      formData.append('audio', file);
-      formData.append('model', 'whisper-1');
-      formData.append('language', 'ja');
+      console.log('Starting transcription with Hugging Face Whisper');
 
-      const { data, error } = await supabase.functions.invoke('transcribe-whisper', {
-        body: formData,
+      // Create automatic speech recognition pipeline
+      const transcriber = await pipeline(
+        "automatic-speech-recognition",
+        "openai/whisper-large-v3",
+        { 
+          device: "webgpu",
+          chunkLength: 30,
+          strideLength: 5,
+          language: "ja",
+          task: "transcribe",
+          returnTimestamps: true
+        }
+      );
+
+      // Convert File to URL for the transcriber
+      const audioUrl = URL.createObjectURL(file);
+      
+      console.log('Processing audio file:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
       });
 
-      if (error) {
-        console.error('Transcription error:', error);
-        throw new Error('音声認識に失敗しました');
-      }
+      // Transcribe audio
+      const output = await transcriber(audioUrl);
+      console.log('Transcription completed:', output);
 
-      return data?.text || null;
+      // Clean up the URL
+      URL.revokeObjectURL(audioUrl);
+
+      return output.text || null;
     } catch (error) {
       console.error('Transcription error:', error);
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error instanceof Error ? error.message : "音声認識中にエラーが発生しました。",
+      });
       throw error;
     } finally {
       setIsProcessing(false);
