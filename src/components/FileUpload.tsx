@@ -1,7 +1,7 @@
 import { Upload } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useVideoUpload } from "@/hooks/useVideoUpload";
-import { useState } from "react"; // Added this import
+import { useState } from "react";
 import FileUploadProgress from "./FileUploadProgress";
 
 interface FileUploadProps {
@@ -45,7 +45,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
 
       onFileSelect({
         file,
-        url: jobId, // We'll use the jobId as a reference
+        url: jobId,
       });
     } catch (error) {
       console.error('Upload error:', error);
@@ -80,7 +80,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
             <span className="font-semibold">クリックして動画をアップロード</span>
             {" "}または動画をドラッグ＆ドロップ
           </p>
-          <p className="text-xs text-gray-500">MP4, WebM, OGG</p>
+          <p className="text-xs text-gray-500">MP4, WebM, OGG (最大100MB)</p>
         </div>
         <input
           type="file"
@@ -94,7 +94,7 @@ const FileUpload = ({ onFileSelect }: FileUploadProps) => {
         <div className="w-full max-w-xs mt-4">
           <div className="bg-gray-200 rounded-full h-2.5">
             <div
-              className="bg-blue-600 h-2.5 rounded-full"
+              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
               style={{ width: `${uploadProgress}%` }}
             ></div>
           </div>

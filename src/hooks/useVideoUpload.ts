@@ -1,23 +1,36 @@
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 
-const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
+// チャンクサイズを100MBに増やして、アップロード回数を減らす
+const CHUNK_SIZE = 100 * 1024 * 1024; // 100MB chunks
+const MAX_CONCURRENT_UPLOADS = 3; // 並列アップロード数
 
 export const useVideoUpload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const uploadChunk = async (
     chunk: Blob,
-    chunkPath: string
+    chunkPath: string,
+    retryCount = 0
   ): Promise<void> => {
-    const { error } = await supabase.storage
-      .from('temp-chunks')
-      .upload(chunkPath, chunk, {
-        upsert: true,
-        contentType: 'application/octet-stream'
-      });
+    try {
+      const { error } = await supabase.storage
+        .from('temp-chunks')
+        .upload(chunkPath, chunk, {
+          upsert: true,
+          contentType: 'application/octet-stream'
+        });
 
-    if (error) throw error;
+      if (error) throw error;
+    } catch (error) {
+      // リトライロジックを実装
+      if (retryCount < 3) {
+        console.log(`Retrying chunk upload (attempt ${retryCount + 1})`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return uploadChunk(chunk, chunkPath, retryCount + 1);
+      }
+      throw error;
+    }
   };
 
   const createVideoJob = async (
@@ -54,10 +67,9 @@ export const useVideoUpload = () => {
     let jobId: string;
 
     try {
-      // Create video job
       jobId = await createVideoJob(file.name, file.size, uploadPath, userId);
 
-      // Split file into chunks
+      // ファイルをチャンクに分割
       const chunks: Blob[] = [];
       let offset = 0;
       while (offset < file.size) {
@@ -65,14 +77,27 @@ export const useVideoUpload = () => {
         offset += CHUNK_SIZE;
       }
 
-      // Upload chunks
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkPath = `${uploadPath}/chunk_${i}`;
-        await uploadChunk(chunks[i], chunkPath);
-        setUploadProgress((i + 1) / chunks.length * 100);
+      console.log(`Uploading ${chunks.length} chunks with size ${CHUNK_SIZE / (1024 * 1024)}MB each`);
+
+      // 並列アップロードの実装
+      for (let i = 0; i < chunks.length; i += MAX_CONCURRENT_UPLOADS) {
+        const uploadPromises = chunks
+          .slice(i, i + MAX_CONCURRENT_UPLOADS)
+          .map((chunk, index) => {
+            const chunkPath = `${uploadPath}/chunk_${i + index}`;
+            return uploadChunk(chunk, chunkPath);
+          });
+
+        await Promise.all(uploadPromises);
+        
+        // プログレス更新
+        const progress = Math.min(((i + MAX_CONCURRENT_UPLOADS) / chunks.length) * 100, 100);
+        setUploadProgress(progress);
+        
+        console.log(`Uploaded chunks ${i + 1} to ${Math.min(i + MAX_CONCURRENT_UPLOADS, chunks.length)} of ${chunks.length}`);
       }
 
-      // Trigger processing queue
+      // 処理キューに追加
       const { error: queueError } = await supabase.functions.invoke('enqueue-video-processing', {
         body: {
           jobId,
@@ -90,7 +115,7 @@ export const useVideoUpload = () => {
 
       return jobId;
     } catch (error) {
-      // Cleanup on error
+      // エラー時のクリーンアップ
       if (jobId) {
         await supabase
           .from('video_jobs')
