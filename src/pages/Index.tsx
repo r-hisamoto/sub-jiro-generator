@@ -30,15 +30,25 @@ const Index = () => {
       description: "動画から音声を認識しています...",
     });
     
-    // 音声認識処理
-    const transcription = await transcribeAudio(file.file);
-    if (transcription) {
+    try {
+      const transcription = await transcribeAudio(file.file);
+      if (!transcription) {
+        throw new Error("音声認識に失敗しました");
+      }
+      
       const generatedSubtitles = generateSubtitles(transcription);
       setSubtitles(generatedSubtitles);
       
       toast({
         title: "字幕生成完了",
         description: `${generatedSubtitles.length}個の字幕を生成しました`,
+      });
+    } catch (error) {
+      console.error("Transcription error:", error);
+      toast({
+        title: "エラー",
+        description: "音声認識中にエラーが発生しました。もう一度お試しください。",
+        variant: "destructive",
       });
     }
   };
