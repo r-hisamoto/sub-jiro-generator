@@ -32,8 +32,8 @@ interface TranscriberOptions {
   timestampGranularity?: "word" | "segment";
 }
 
-// Using a completely public model that's optimized for Japanese
-const MODEL_ID = "lmz/whisper-small";
+// Using the official Whisper small model instead
+const MODEL_ID = "openai/whisper-small";
 
 // Configure pipeline options
 const getPipelineOptions = async (): Promise<TranscriberOptions> => {
