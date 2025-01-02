@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,15 +11,12 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    )
-
     const formData = await req.formData()
     const audioFile = formData.get('audio') as File
-    if (!audioFile) {
-      throw new Error('No audio file provided')
+    
+    // ファイルサイズの制限を追加（25MB）
+    if (audioFile.size > 25 * 1024 * 1024) {
+      throw new Error('ファイルサイズが大きすぎます（上限: 25MB）')
     }
 
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -33,7 +29,8 @@ serve(async (req) => {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new Error(`OpenAI API error: ${error}`)
+      console.error('OpenAI API error:', error)
+      throw new Error('音声認識に失敗しました')
     }
 
     const data = await response.json()
@@ -46,6 +43,7 @@ serve(async (req) => {
       },
     )
   } catch (error) {
+    console.error('Transcription error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

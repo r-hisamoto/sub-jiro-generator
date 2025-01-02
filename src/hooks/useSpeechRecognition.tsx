@@ -8,6 +8,11 @@ export const useSpeechRecognition = () => {
     try {
       setIsProcessing(true);
       
+      // ファイルサイズの制限を追加（25MB）
+      if (file.size > 25 * 1024 * 1024) {
+        throw new Error('ファイルサイズが大きすぎます（上限: 25MB）');
+      }
+      
       const formData = new FormData();
       formData.append('audio', file);
       formData.append('model', 'whisper-1');
