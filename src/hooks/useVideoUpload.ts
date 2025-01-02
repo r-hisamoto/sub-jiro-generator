@@ -1,90 +1,10 @@
 import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-
-// チャンクサイズを50MBに減少（より小さなチャンクでアップロード）
-const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
-const MAX_CONCURRENT_UPLOADS = 3; // 同時アップロード数を減らして安定性を向上
-const RETRY_DELAYS = [1000, 2000, 4000, 8000]; // リトライ間隔を指数的に増加
-const UPLOAD_TIMEOUT = 300000; // タイムアウトを5分に延長
-
-interface UploadResult {
-  error: Error | null;
-  data: any;
-}
+import { CHUNK_SIZE, MAX_CONCURRENT_UPLOADS } from "@/config/uploadConfig";
+import { uploadChunk, createVideoJob, divideFileIntoChunks } from "@/utils/uploadUtils";
 
 export const useVideoUpload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
-
-  const uploadChunk = async (
-    chunk: Blob,
-    chunkPath: string,
-    retryCount = 0
-  ): Promise<void> => {
-    try {
-      console.log(`Uploading chunk: ${chunkPath}, size: ${chunk.size / (1024 * 1024)}MB`);
-      
-      const timeoutPromise = new Promise<UploadResult>((_, reject) => {
-        setTimeout(() => reject(new Error('Upload timeout')), UPLOAD_TIMEOUT);
-      });
-
-      const uploadPromise: Promise<UploadResult> = supabase.storage
-        .from('temp-chunks')
-        .upload(chunkPath, chunk, {
-          upsert: true,
-          contentType: 'application/octet-stream',
-          duplex: 'half'
-        });
-
-      const result = await Promise.race([uploadPromise, timeoutPromise]);
-      
-      if (result.error) {
-        throw result.error;
-      }
-      
-      console.log(`Successfully uploaded chunk: ${chunkPath}`);
-    } catch (error) {
-      console.error(`Error uploading chunk ${chunkPath}:`, error);
-      
-      if (retryCount < RETRY_DELAYS.length) {
-        const delay = RETRY_DELAYS[retryCount];
-        console.log(`Retrying chunk upload after ${delay}ms (attempt ${retryCount + 1})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return uploadChunk(chunk, chunkPath, retryCount + 1);
-      }
-      throw error;
-    }
-  };
-
-  const createVideoJob = async (
-    fileName: string,
-    fileSize: number,
-    uploadPath: string,
-    userId: string
-  ): Promise<string> => {
-    console.log('Creating video job:', { fileName, fileSize, uploadPath, userId });
-    
-    const { data: job, error } = await supabase
-      .from('video_jobs')
-      .insert({
-        user_id: userId,
-        status: 'pending',
-        metadata: {
-          filename: fileName,
-          filesize: fileSize
-        },
-        upload_path: uploadPath
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating video job:', error);
-      throw error;
-    }
-    
-    console.log('Video job created:', job);
-    return job.id;
-  };
 
   const uploadVideo = async (file: File): Promise<string> => {
     console.log('Starting video upload:', {
@@ -104,25 +24,14 @@ export const useVideoUpload = () => {
 
     try {
       jobId = await createVideoJob(file.name, file.size, uploadPath, userId);
-
-      // ファイルをチャンクに分割
-      const chunks: Blob[] = [];
-      let offset = 0;
-      while (offset < file.size) {
-        const chunk = file.slice(offset, offset + CHUNK_SIZE);
-        chunks.push(chunk);
-        offset += CHUNK_SIZE;
-      }
-
+      const chunks = divideFileIntoChunks(file, CHUNK_SIZE);
       console.log(`Divided file into ${chunks.length} chunks`);
 
-      // 並列アップロードの実装（3個まで同時実行）
       const uploadQueue = [...chunks];
       const activeUploads = new Set<Promise<void>>();
       let completedChunks = 0;
 
       while (uploadQueue.length > 0 || activeUploads.size > 0) {
-        // キューからチャンクを取り出してアップロード
         while (uploadQueue.length > 0 && activeUploads.size < MAX_CONCURRENT_UPLOADS) {
           const chunk = uploadQueue.shift()!;
           const chunkIndex = chunks.indexOf(chunk);
@@ -137,20 +46,18 @@ export const useVideoUpload = () => {
             })
             .catch((error) => {
               console.error(`Failed to upload chunk ${chunkIndex}:`, error);
-              uploadQueue.unshift(chunk); // リトライのためにキューに戻す
+              uploadQueue.unshift(chunk);
               activeUploads.delete(uploadPromise);
             });
 
           activeUploads.add(uploadPromise);
         }
 
-        // アクティブなアップロードの完了を待つ
         if (activeUploads.size > 0) {
           await Promise.race([...activeUploads]);
         }
       }
 
-      // 処理キューに追加
       const { error: queueError } = await supabase.functions.invoke('enqueue-video-processing', {
         body: {
           jobId,
