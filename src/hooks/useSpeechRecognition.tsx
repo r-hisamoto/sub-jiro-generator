@@ -33,10 +33,10 @@ interface TranscriberOptions {
 }
 
 // Using a completely public model that's optimized for Japanese
-const MODEL_ID = "Xenova/whisper-tiny.ja";
+const MODEL_ID = "lmz/whisper-small";
 
 // Configure pipeline options
-const getPipelineOptions = (token: string): TranscriberOptions => ({
+const getPipelineOptions = (): TranscriberOptions => ({
   device: "wasm" as const, // Using wasm as it's more stable
   revision: "main",
   quantized: true,
@@ -54,11 +54,6 @@ const getPipelineOptions = (token: string): TranscriberOptions => ({
     useCache: true,
     allowRemoteModels: true
   },
-  fetchOptions: {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  },
   chunkLength: 30,
   strideLength: 5,
   language: "ja",
@@ -74,20 +69,11 @@ export const useSpeechRecognition = () => {
   const transcribeAudio = async (audioFile: File) => {
     setIsProcessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('get-secret', {
-        body: { name: 'HUGGING_FACE_ACCESS_TOKEN' }
-      });
-
-      if (error || !data?.secret) {
-        console.error('Failed to get Hugging Face token:', error);
-        throw new Error('Hugging Face APIトークンの取得に失敗しました。');
-      }
-
-      console.log('Initializing pipeline with token...');
+      console.log('Initializing pipeline...');
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         MODEL_ID,
-        getPipelineOptions(data.secret)
+        getPipelineOptions()
       );
 
       console.log('Converting audio file...');
