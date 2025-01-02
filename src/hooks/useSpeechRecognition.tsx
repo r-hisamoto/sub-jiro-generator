@@ -36,31 +36,48 @@ interface TranscriberOptions {
 const MODEL_ID = "lmz/whisper-small";
 
 // Configure pipeline options
-const getPipelineOptions = (): TranscriberOptions => ({
-  device: "wasm" as const, // Using wasm as it's more stable
-  revision: "main",
-  quantized: true,
-  progressCallback: (progress: number) => {
-    console.log(`Model loading progress: ${progress * 100}%`);
-  },
-  config: {
-    model_type: "whisper",
-    is_encoder_decoder: true,
-    max_position_embeddings: 1500,
-    "transformers.js_config": {
-      task: "automatic-speech-recognition"
+const getPipelineOptions = async (): Promise<TranscriberOptions> => {
+  // Get the Hugging Face access token from Supabase Edge Function
+  const { data: { token }, error } = await supabase.functions.invoke('get-secret', {
+    body: { key: 'HUGGING_FACE_ACCESS_TOKEN' }
+  });
+
+  if (error || !token) {
+    console.error('Failed to get Hugging Face access token:', error);
+    throw new Error('Failed to get Hugging Face access token');
+  }
+
+  return {
+    device: "wasm" as const,
+    revision: "main",
+    quantized: true,
+    progressCallback: (progress: number) => {
+      console.log(`Model loading progress: ${progress * 100}%`);
     },
-    normalized_config: true,
-    useCache: true,
-    allowRemoteModels: true
-  },
-  chunkLength: 30,
-  strideLength: 5,
-  language: "ja",
-  task: "transcribe",
-  returnTimestamps: true,
-  timestampGranularity: "word"
-});
+    config: {
+      model_type: "whisper",
+      is_encoder_decoder: true,
+      max_position_embeddings: 1500,
+      "transformers.js_config": {
+        task: "automatic-speech-recognition"
+      },
+      normalized_config: true,
+      useCache: true,
+      allowRemoteModels: true
+    },
+    fetchOptions: {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    },
+    chunkLength: 30,
+    strideLength: 5,
+    language: "ja",
+    task: "transcribe",
+    returnTimestamps: true,
+    timestampGranularity: "word"
+  };
+};
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -70,10 +87,11 @@ export const useSpeechRecognition = () => {
     setIsProcessing(true);
     try {
       console.log('Initializing pipeline...');
+      const options = await getPipelineOptions();
       const transcriber = await pipeline(
         "automatic-speech-recognition",
         MODEL_ID,
-        getPipelineOptions()
+        options
       );
 
       console.log('Converting audio file...');

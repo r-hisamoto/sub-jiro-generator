@@ -6,42 +6,26 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { name } = await req.json()
-    console.log(`Attempting to retrieve secret: ${name}`)
+    const { key } = await req.json()
+    const value = Deno.env.get(key)
 
-    // Get the secret value from Supabase environment
-    const secret = Deno.env.get(name)
-    if (!secret) {
-      console.error(`Secret ${name} not found`)
-      throw new Error(`Secret ${name} not found`)
+    if (!value) {
+      throw new Error(`Secret ${key} not found`)
     }
 
     return new Response(
-      JSON.stringify({ secret }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
+      JSON.stringify({ token: value }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   } catch (error) {
-    console.error('Error in get-secret function:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        },
-        status: 400
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 },
     )
   }
 })
