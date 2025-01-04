@@ -26,10 +26,10 @@ export const useSpeechRecognition = () => {
         throw new Error('Hugging Face token not configured');
       }
 
-      // 日本語モデルを使用
+      // Use a public model instead
       const transcriber = await pipeline(
         "automatic-speech-recognition",
-        "Xenova/whisper-small.ja",
+        "openai/whisper-small",
         { 
           device: "webgpu",
           chunkLength: 30,
