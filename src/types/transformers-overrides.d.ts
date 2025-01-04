@@ -11,6 +11,9 @@ declare module "@huggingface/transformers" {
     fetchOptions?: {
       headers?: Record<string, string>;
     };
+    credentials?: {
+      accessToken: string;
+    };
   }
 
   export interface TranscriberOptions extends PretrainedModelOptions {
