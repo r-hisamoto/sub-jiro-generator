@@ -26,10 +26,10 @@ export const useSpeechRecognition = () => {
         throw new Error('Hugging Face token not configured');
       }
 
-      // Use a public model instead
+      // Use a model that has ONNX files available
       const transcriber = await pipeline(
         "automatic-speech-recognition",
-        "openai/whisper-small",
+        "onnx-community/whisper-tiny.ja",
         { 
           device: "webgpu",
           chunkLength: 30,
