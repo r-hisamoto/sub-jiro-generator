@@ -11,7 +11,6 @@ declare module "@huggingface/transformers" {
     fetchOptions?: {
       headers?: Record<string, string>;
     };
-    cache_dir?: string;
     local_files_only?: boolean;
     model_file_name?: string;
     session_options?: any;
