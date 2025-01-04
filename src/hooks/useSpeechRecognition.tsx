@@ -17,7 +17,13 @@ export const useSpeechRecognition = () => {
       });
 
       if (tokenError) {
+        console.error('Failed to get Hugging Face token:', tokenError);
         throw new Error('Failed to get Hugging Face token');
+      }
+
+      if (!token) {
+        console.error('No Hugging Face token found');
+        throw new Error('Hugging Face token not configured');
       }
 
       // 日本語モデルを使用
@@ -32,8 +38,10 @@ export const useSpeechRecognition = () => {
           task: "transcribe",
           returnTimestamps: true,
           quantized: true,
-          credentials: {
-            accessToken: token
+          fetchOptions: {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
           }
         }
       );
