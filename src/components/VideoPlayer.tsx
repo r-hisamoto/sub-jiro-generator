@@ -8,6 +8,15 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 
+interface VideoJob {
+  upload_path: string;
+  status: string;
+  metadata: {
+    progress?: number;
+    [key: string]: any;
+  };
+}
+
 interface VideoPlayerProps {
   videoUrl: string;
   currentTime: number;
@@ -39,7 +48,7 @@ const VideoPlayer = ({
           .from('video_jobs')
           .select('upload_path, status, metadata')
           .eq('id', videoUrl)
-          .single();
+          .single<VideoJob>();
 
         if (jobError) {
           console.error('Error fetching video job:', jobError);
