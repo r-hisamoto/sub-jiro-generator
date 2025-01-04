@@ -26,7 +26,6 @@ declare module "@huggingface/transformers" {
     returnTimestamps?: boolean;
     timestampGranularity?: "word" | "segment";
     quantized?: boolean;
-    cache_dir?: string;
   }
 
   export interface AutomaticSpeechRecognitionPipeline {

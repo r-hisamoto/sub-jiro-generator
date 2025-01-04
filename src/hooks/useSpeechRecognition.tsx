@@ -69,14 +69,13 @@ export const useSpeechRecognition = () => {
         "automatic-speech-recognition",
         "onnx-community/whisper-tiny.ja",
         {
+          quantized: true,
           device: "webgpu",
           chunkLength: 30,
           strideLength: 5,
           language: "ja",
           task: "transcribe",
           returnTimestamps: true,
-          quantized: true,
-          cache_dir: './.cache',
           fetchOptions: {
             headers: {
               'Authorization': `Bearer ${token}`,
