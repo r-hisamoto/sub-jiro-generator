@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { pipeline } from "@huggingface/transformers";
 import { toast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 export const useSpeechRecognition = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -9,6 +10,15 @@ export const useSpeechRecognition = () => {
     try {
       setIsProcessing(true);
       console.log('Starting transcription with Hugging Face Whisper');
+
+      // Get Hugging Face token from Supabase Edge Function
+      const { data: { token }, error: tokenError } = await supabase.functions.invoke('get-secret', {
+        body: { key: 'HUGGING_FACE_ACCESS_TOKEN' }
+      });
+
+      if (tokenError) {
+        throw new Error('Failed to get Hugging Face token');
+      }
 
       // 日本語モデルを使用
       const transcriber = await pipeline(
@@ -21,7 +31,10 @@ export const useSpeechRecognition = () => {
           language: "ja",
           task: "transcribe",
           returnTimestamps: true,
-          quantized: true
+          quantized: true,
+          credentials: {
+            accessToken: token
+          }
         }
       );
 
