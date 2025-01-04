@@ -10,10 +10,10 @@ export const useSpeechRecognition = () => {
       setIsProcessing(true);
       console.log('Starting transcription with Hugging Face Whisper');
 
-      // Create automatic speech recognition pipeline
+      // 日本語モデルを使用
       const transcriber = await pipeline(
         "automatic-speech-recognition",
-        "Xenova/whisper-small",  // より小さく、安定したモデルに変更
+        "Xenova/whisper-small.ja",
         { 
           device: "webgpu",
           chunkLength: 30,
@@ -21,11 +21,10 @@ export const useSpeechRecognition = () => {
           language: "ja",
           task: "transcribe",
           returnTimestamps: true,
-          quantized: true  // メモリ使用量を削減
+          quantized: true
         }
       );
 
-      // Convert File to URL for the transcriber
       const audioUrl = URL.createObjectURL(file);
       
       console.log('Processing audio file:', {
@@ -34,11 +33,9 @@ export const useSpeechRecognition = () => {
         fileType: file.type
       });
 
-      // Transcribe audio
       const output = await transcriber(audioUrl);
       console.log('Transcription completed:', output);
 
-      // Clean up the URL
       URL.revokeObjectURL(audioUrl);
 
       return output.text || null;

@@ -1,8 +1,12 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Subtitle } from "@/types/subtitle";
+import { formatTime } from "@/lib/subtitleUtils";
+import { Save, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
 
 interface VideoPlayerProps {
   videoUrl: string;
@@ -20,6 +24,7 @@ const VideoPlayer = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState<number>(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -30,10 +35,9 @@ const VideoPlayer = ({
           return null;
         }
 
-        // First, get the video job details
         const { data: videoJob, error: jobError } = await supabase
           .from('video_jobs')
-          .select('upload_path, status')
+          .select('upload_path, status, metadata')
           .eq('id', videoUrl)
           .single();
 
@@ -48,12 +52,16 @@ const VideoPlayer = ({
 
         console.log('Found video job:', videoJob);
         
-        // If the video is still processing, set the processing state
         if (videoJob.status === 'pending' || videoJob.status === 'processing') {
           setIsProcessing(true);
+          // メタデータから進捗状況を取得
+          if (videoJob.metadata?.progress) {
+            setProcessingProgress(videoJob.metadata.progress);
+          }
           return null;
         }
         
+        setIsProcessing(false);
         return videoJob.upload_path;
       } catch (error) {
         console.error('Error getting video path:', error);
@@ -65,7 +73,6 @@ const VideoPlayer = ({
       try {
         const filePath = await getVideoPath();
         if (!filePath) {
-          // If no file path, it might be still processing
           return;
         }
 
@@ -76,7 +83,6 @@ const VideoPlayer = ({
           .createSignedUrl(filePath, 3600);
 
         if (error) {
-          // If we get a 404, the video might still be processing
           if (error.message.includes('404') || error.message.includes('not_found')) {
             setIsProcessing(true);
             return;
@@ -106,12 +112,12 @@ const VideoPlayer = ({
       }
     };
 
-    // Poll for video status every 5 seconds if processing
+    // ポーリング間隔を2秒に短縮
     const pollInterval = setInterval(() => {
       if (isProcessing) {
         getSignedUrl();
       }
-    }, 5000);
+    }, 2000);
 
     if (videoUrl) {
       getSignedUrl();
@@ -152,7 +158,7 @@ const VideoPlayer = ({
           {isProcessing ? (
             <>
               <Loader2 className="w-8 h-8 animate-spin" />
-              <p>動画を処理中です...</p>
+              <p>動画を処理中です... {processingProgress > 0 ? `${Math.round(processingProgress)}%` : ''}</p>
             </>
           ) : (
             "動画を読み込み中..."
