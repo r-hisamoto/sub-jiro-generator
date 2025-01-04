@@ -1,0 +1,130 @@
+.container {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.uploadSection {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.uploadLabel {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s ease;
+}
+
+.uploadLabel:hover {
+  background-color: #0056b3;
+}
+
+.uploadLabel:focus {
+  outline: 3px solid #0056b3;
+  outline-offset: 2px;
+}
+
+.error {
+  padding: 1rem;
+  background-color: #ffebee;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  color: #c62828;
+  margin: 1rem 0;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.transcript {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  animation: slideIn 0.3s ease-in-out;
+}
+
+.transcript h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.transcript p {
+  line-height: 1.6;
+  color: #444;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uploadLabel {
+    transition: none;
+  }
+
+  .error,
+  .transcript {
+    animation: none;
+  }
+}
+
+@media (prefers-contrast: high) {
+  .uploadLabel {
+    background-color: #000000;
+    color: #ffffff;
+    border: 2px solid #ffffff;
+  }
+
+  .uploadLabel:focus {
+    outline-color: #ffffff;
+  }
+
+  .error {
+    background-color: #ffffff;
+    border: 2px solid #ff0000;
+    color: #ff0000;
+  }
+
+  .transcript {
+    background-color: #ffffff;
+    border: 2px solid #000000;
+  }
+
+  .transcript h3,
+  .transcript p {
+    color: #000000;
+  }
+} 
