@@ -135,15 +135,15 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         throw new Error('音声解析結果が空です');
       }
 
-      // 音声認識結果をセグメントに分割（句点で区切る）
+      // 音声認識結果をセグメントに分割
       const segments = result.split(/[。．.!！?？]/).filter(Boolean).map((text, index, array) => {
-        // 簡易的な時間計算（全体の長さを文の数で割って推定）
-        const duration = file.size / 1024 / array.length; // 1KBを1秒として計算
-        const startTime = index * duration;
-        const endTime = (index + 1) * duration;
+        const segmentLength = text.length;
+        const totalLength = array.reduce((sum, t) => sum + t.length, 0);
+        const startTime = (index / array.length) * (file.size / 1024); // 簡易的な時間計算
+        const endTime = ((index + 1) / array.length) * (file.size / 1024);
         
         return {
-          text: applyDictionary(text.trim() + '。'), // 句点を追加
+          text: applyDictionary(text.trim()),
           startTime,
           endTime
         };
@@ -153,7 +153,6 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         throw new Error('音声認識結果のセグメントが空です');
       }
 
-      console.log('音声認識結果をセグメントに分割:', segments);
       setTranscription(segments);
 
       // AIによる解析結果のレビュー
