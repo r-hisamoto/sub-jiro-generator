@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from './ui/button';
-import { FileUpload } from './FileUpload';
+import { FileUpload } from './FileUpload/FileUpload';
 import { Progress } from './ui/progress';
 import { Card } from './ui/card';
 import { LoadingSpinner } from './LoadingSpinner/LoadingSpinner';
+import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 export const TranscriptionManager: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -30,6 +32,10 @@ export const TranscriptionManager: React.FC = () => {
       }
 
       setIsInitialized(true);
+      toast({
+        title: '準備完了',
+        description: '音声解析サービスの初期化が完了しました',
+      });
     } catch (error) {
       console.error('サービスの初期化エラー:', error);
       toast({
@@ -90,13 +96,19 @@ export const TranscriptionManager: React.FC = () => {
   if (!isInitialized) {
     return (
       <Card className="flex flex-col items-center justify-center min-h-[400px] p-8 space-y-4">
-        <div className="text-xl font-semibold text-gray-700 text-center">
-          音声解析サービスが初期化されていません
-        </div>
+        <Alert variant="destructive" className="max-w-md">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>初期化エラー</AlertTitle>
+          <AlertDescription>
+            音声解析サービスが初期化されていません
+          </AlertDescription>
+        </Alert>
         <Button 
           onClick={initializeServices}
           className="mt-4"
+          variant="outline"
         >
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           再試行
         </Button>
       </Card>
@@ -114,6 +126,7 @@ export const TranscriptionManager: React.FC = () => {
           <FileUpload
             onFileSelect={handleFileSelect}
             accept="audio/*,video/*"
+            maxSize={25 * 1024 * 1024} // 25MB
             className="w-full"
           />
         </div>
@@ -121,9 +134,10 @@ export const TranscriptionManager: React.FC = () => {
         {isProcessing && (
           <div className="w-full max-w-2xl mx-auto space-y-4">
             <Progress value={progress} className="w-full" />
-            <p className="text-sm text-gray-600 text-center">
-              処理中... {progress}%
-            </p>
+            <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>処理中... {progress}%</span>
+            </div>
             <LoadingSpinner 
               message="音声を解析しています..."
               progress={progress}
@@ -131,6 +145,16 @@ export const TranscriptionManager: React.FC = () => {
               size="md"
             />
           </div>
+        )}
+
+        {progress === 100 && !isProcessing && (
+          <Alert className="max-w-2xl mx-auto">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertTitle>処理完了</AlertTitle>
+            <AlertDescription>
+              音声の解析が完了しました
+            </AlertDescription>
+          </Alert>
         )}
       </Card>
     </div>
