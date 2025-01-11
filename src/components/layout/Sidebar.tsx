@@ -1,6 +1,7 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
 import { Home, FileAudio, Music, Video, Book, Settings, HelpCircle } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 const menuItems = [
   { icon: Home, label: 'ホーム', href: '/' },
@@ -12,27 +13,29 @@ const menuItems = [
   { icon: HelpCircle, label: 'ヘルプ', href: '/help' }
 ];
 
-export const Sidebar: React.FC = () => {
+export const Sidebar = () => {
   const location = useLocation();
 
   return (
     <aside className="fixed left-0 top-16 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 overflow-y-auto">
       <nav className="p-4">
         <ul className="space-y-2">
-          {menuItems.map(({ icon: Icon, label, href }) => {
-            const isActive = location.pathname === href;
+          {menuItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            const Icon = item.icon;
+            
             return (
-              <li key={href}>
+              <li key={item.href}>
                 <Link
-                  to={href}
-                  className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                  to={item.href}
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
                     isActive
                       ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
-                  <Icon className="w-5 h-5 mr-3" />
-                  <span>{label}</span>
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
                 </Link>
               </li>
             );

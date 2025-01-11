@@ -74,15 +74,10 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         const webGPUService = new WebGPUService();
         const performanceService = new PerformanceService();
         
-        // OpenAI APIキーの取得と確認
+        // OpenAI APIキーの取得
         const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-        console.log('APIキーの状態:', {
-          exists: !!apiKey,
-          length: apiKey?.length || 0
-        });
-
         if (!apiKey) {
-          throw new Error('OpenAI APIキーが設定されていません。.envファイルを確認してください。');
+          throw new Error('OpenAI APIキーが設定されていません');
         }
 
         // WhisperServiceの初期化
@@ -133,21 +128,12 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
       };
 
       // 音声解析の実行
-      console.log('音声解析を開始します:', { 
-        fileName: file.name, 
-        fileType: file.type, 
-        fileSize: file.size,
-        hasWhisperService: !!services.whisper,
-        hasApiKey: !!services.whisper?.apiKey
-      });
-
+      console.log('音声解析を開始します:', { fileName: file.name, fileType: file.type, fileSize: file.size });
       const result = await services.whisper.transcribe(file, handleProgress);
       
       if (!result) {
         throw new Error('音声解析結果が空です');
       }
-
-      console.log('音声解析結果:', { result, length: result.length });
 
       // 音声認識結果をセグメントに分割（句点で区切る）
       const segments = result.split(/[。．.!！?？]/).filter(Boolean).map((text, index, array) => {

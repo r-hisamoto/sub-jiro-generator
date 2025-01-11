@@ -31,14 +31,8 @@ export class WhisperService {
     this.performanceService.startMeasurement('transcribe');
 
     try {
-      // APIキーの確認
-      if (!this.apiKey) {
-        console.error('WhisperService: APIキーが設定されていません');
-        throw new Error('APIキーが設定されていません');
-      }
-
       console.log('WhisperService: 音声解析開始', {
-        apiKeyLength: this.apiKey.length,
+        apiKey: this.apiKey ? '設定済み' : '未設定',
         fileSize: file.size,
         fileType: file.type,
         fileName: file.name
@@ -94,9 +88,10 @@ export class WhisperService {
 
       console.log('WhisperService: APIレスポンス受信', {
         status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
+        statusText: response.statusText
       });
+
+      onProgress?.(50);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -108,17 +103,16 @@ export class WhisperService {
         throw new Error(`音声認識に失敗しました: ${response.status} - ${errorText}`);
       }
 
-      const responseText = await response.text();
-      console.log('WhisperService: レスポンステキスト', responseText);
-
       let result;
       try {
-        result = JSON.parse(responseText);
+        result = await response.json();
         console.log('WhisperService: 解析結果', result);
       } catch (error) {
         console.error('WhisperService: JSONパースエラー', error);
-        throw new Error('APIレスポンスの解析に失敗しました');
+        throw new Error(`APIレスポンスの解析に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
+
+      onProgress?.(90);
 
       if (!result || !result.text) {
         console.error('WhisperService: 不正な応答', result);
@@ -126,8 +120,12 @@ export class WhisperService {
       }
 
       const text = result.text.trim();
-      console.log('WhisperService: 最終テキスト', { text, length: text.length });
+      if (text.length === 0) {
+        throw new Error('音声認識結果が空文字列です');
+      }
 
+      console.log('WhisperService: 音声解析完了', { textLength: text.length });
+      onProgress?.(100);
       return text;
     } catch (error) {
       console.error('WhisperService: エラー発生', error);
