@@ -9,6 +9,9 @@ import { DictionaryManager } from './DictionaryManager';
 import { applyDictionary } from '@/lib/dictionaryManager';
 import { SlideShowEditor, SlideItem } from './SlideShowEditor';
 import { PerformanceService } from '../services/performance/PerformanceService';
+import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 interface TranscriptionResult {
   text: string;
@@ -55,17 +58,8 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
     webGPU: WebGPUService | null;
     whisper: WhisperService | null;
   }>({ webGPU: null, whisper: null });
-  const [batchEdits, setBatchEdits] = useState<BatchEdit[]>([]);
-  const [showBatchEditModal, setShowBatchEditModal] = useState(false);
-  const [newBatchEdit, setNewBatchEdit] = useState<BatchEdit>({
-    searchText: '',
-    replaceText: '',
-    count: 0,
-    isRegex: false
-  });
-  const [showDictionaryModal, setShowDictionaryModal] = useState(false);
-  const [slides, setSlides] = useState<SlideItem[]>([]);
   const [progress, setProgress] = useState(0);
+  const { toast } = useToast();
 
   useEffect(() => {
     const initializeServices = async () => {
@@ -75,14 +69,14 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         const performanceService = new PerformanceService();
         
         // OpenAI APIキーの取得と確認
-        const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+        const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
         console.log('APIキーの状態:', {
           exists: !!apiKey,
           length: apiKey?.length || 0
         });
 
         if (!apiKey) {
-          throw new Error('OpenAI APIキーが設定されていません。.envファイルを確認してください。');
+          throw new Error('OpenAI APIキーが設定されていません。環境変数を確認してください。');
         }
 
         // WhisperServiceの初期化
@@ -99,13 +93,18 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
       } catch (error) {
         console.error('サービスの初期化エラー:', error);
         setError(error instanceof Error ? error.message : 'サービスの初期化に失敗しました');
+        toast({
+          variant: "destructive",
+          title: "エラー",
+          description: error instanceof Error ? error.message : 'サービスの初期化に失敗しました',
+        });
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeServices();
-  }, []);
+  }, [toast]);
 
   const handleFileUpload = async (file: File) => {
     if (!services.whisper) {
@@ -319,6 +318,9 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
       {isLoading && (
         <div className="text-center p-4 bg-blue-50 rounded">
           <p>処理中...</p>
+          {progress > 0 && (
+            <Progress value={progress} className="w-full mt-2" />
+          )}
         </div>
       )}
 
@@ -516,4 +518,4 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
       )}
     </div>
   );
-}; 
+};
