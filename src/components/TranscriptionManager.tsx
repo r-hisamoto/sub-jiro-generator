@@ -6,7 +6,7 @@ interface TranscriptionManagerProps {
   onTranscriptionComplete?: (text: string) => void;
 }
 
-const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ onTranscriptionComplete }) => {
+export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ onTranscriptionComplete }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
@@ -63,7 +63,6 @@ const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ onTranscrip
           <button
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             onClick={() => {
-              // Implement transcription logic here
               onTranscriptionComplete?.("Sample transcription text");
             }}
           >
@@ -77,5 +76,3 @@ const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ onTranscrip
     </div>
   );
 };
-
-export default TranscriptionManager;
