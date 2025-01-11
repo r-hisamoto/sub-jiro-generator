@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from './ui/button';
+import { FileUpload } from './FileUpload';
+import { Progress } from './ui/progress';
 
-interface TranscriptionManagerProps {
-  onTranscriptionComplete?: (text: string) => void;
-}
-
-export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ onTranscriptionComplete }) => {
+export const TranscriptionManager: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
   const { toast } = useToast();
 
   const initializeServices = async () => {
     try {
-      // Hugging Face APIトークンの取得
       const { data: { secret }, error } = await supabase.functions.invoke('get-secret', {
         body: { key: 'HUGGING_FACE_ACCESS_TOKEN' }
       });
@@ -27,13 +27,7 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ onTr
         return;
       }
 
-      // APIトークンの設定
-      if (typeof window !== 'undefined') {
-        window.HUGGING_FACE_ACCESS_TOKEN = secret;
-      }
-
       setIsInitialized(true);
-      console.log('Transcription service initialized successfully');
     } catch (error) {
       console.error('サービスの初期化エラー:', error);
       toast({
@@ -48,30 +42,85 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ onTr
     initializeServices();
   }, []);
 
+  const handleFileSelect = async (file: File) => {
+    setIsProcessing(true);
+    setProgress(0);
+    
+    try {
+      // Simulate progress for now
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(interval);
+            return 100;
+          }
+          return prev + 10;
+        });
+      }, 500);
+
+      toast({
+        title: "処理開始",
+        description: "音声ファイルの解析を開始しました",
+      });
+
+      // Clear interval after simulated processing
+      setTimeout(() => {
+        clearInterval(interval);
+        setIsProcessing(false);
+        setProgress(100);
+        
+        toast({
+          title: "処理完了",
+          description: "音声ファイルの解析が完了しました",
+        });
+      }, 5000);
+
+    } catch (error) {
+      setIsProcessing(false);
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: "音声ファイルの処理中にエラーが発生しました",
+      });
+    }
+  };
+
   if (!isInitialized) {
     return (
-      <div className="p-4 bg-red-50 text-red-600 rounded-md">
-        音声解析サービスが初期化されていません
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <div className="text-xl font-semibold text-gray-700">
+          音声解析サービスが初期化されていません
+        </div>
+        <Button onClick={initializeServices}>
+          再試行
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="w-full">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-2">
-          <button
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            onClick={() => {
-              onTranscriptionComplete?.("Sample transcription text");
-            }}
-          >
-            音声解析開始
-          </button>
-          <span className="text-sm text-gray-500">
-            音声ファイルをアップロードして解析を開始します
-          </span>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex flex-col items-center justify-center space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          音声文字起こし
+        </h1>
+        
+        <div className="w-full max-w-2xl">
+          <FileUpload
+            onFileSelect={handleFileSelect}
+            accept="audio/*,video/*"
+            maxSize={25 * 1024 * 1024} // 25MB
+          />
         </div>
+
+        {isProcessing && (
+          <div className="w-full max-w-2xl space-y-2">
+            <Progress value={progress} className="w-full" />
+            <p className="text-sm text-gray-600 text-center">
+              処理中... {progress}%
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
