@@ -1,84 +1,56 @@
 import React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { cn } from '@/lib/utils';
 import {
   Home,
-  Video,
-  Music,
+  FileAudio,
   Settings,
-  Users,
   HelpCircle,
-  FileText,
-  Sliders
+  Music,
+  Video,
+  Book
 } from 'lucide-react';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
 
 interface SidebarProps {
   className?: string;
 }
 
-interface SidebarItem {
-  icon: React.ElementType;
-  label: string;
-  href: string;
-}
-
-const sidebarItems: SidebarItem[] = [
-  { icon: Home, label: 'ホーム', href: '/' },
-  { icon: Video, label: '動画編集', href: '/video' },
-  { icon: Music, label: 'BGM管理', href: '/bgm' },
-  { icon: FileText, label: '字幕編集', href: '/subtitles' },
-  { icon: Sliders, label: 'エフェクト', href: '/effects' },
-  { icon: Users, label: 'チーム', href: '/team' },
-  { icon: Settings, label: '設定', href: '/settings' },
-  { icon: HelpCircle, label: 'ヘルプ', href: '/help' },
-];
-
-export const Sidebar: React.FC<SidebarProps> = ({ className }) => {
+export function Sidebar({ className }: SidebarProps) {
   const router = useRouter();
 
+  const menuItems = [
+    { href: '/', icon: Home, label: 'ホーム' },
+    { href: '/transcribe', icon: FileAudio, label: '音声文字起こし' },
+    { href: '/bgm', icon: Music, label: 'BGM管理' },
+    { href: '/videos', icon: Video, label: '動画管理' },
+    { href: '/dictionary', icon: Book, label: '辞書管理' },
+    { href: '/settings', icon: Settings, label: '設定' },
+    { href: '/help', icon: HelpCircle, label: 'ヘルプ' },
+  ];
+
   return (
-    <div className={cn(
-      'w-64 h-screen bg-gray-900 text-white p-4 flex flex-col fixed left-0 top-0',
-      className
-    )}>
-      <div className="mb-8 px-4">
-        <h1 className="text-xl font-bold">Sub Jiro</h1>
-      </div>
-
-      <nav className="flex-1">
-        <ul className="space-y-2">
-          {sidebarItems.map((item) => {
-            const isActive = router.pathname === item.href;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors',
-                    isActive
-                      ? 'bg-gray-800 text-white'
-                      : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+    <aside className={cn('w-64 bg-white border-r border-gray-200 h-screen', className)}>
+      <nav className="p-4 space-y-2">
+        {menuItems.map(({ href, icon: Icon, label }) => {
+          const isActive = router.pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors',
+                isActive
+                  ? 'bg-gray-100 text-gray-900'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              )}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-sm font-medium">{label}</span>
+            </Link>
+          );
+        })}
       </nav>
-
-      <div className="mt-auto px-4 py-4 border-t border-gray-800">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-full bg-gray-700" />
-          <div>
-            <p className="text-sm font-medium">ユーザー名</p>
-            <p className="text-xs text-gray-400">ユーザーID</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    </aside>
   );
-}; 
+} 
