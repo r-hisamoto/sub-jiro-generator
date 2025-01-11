@@ -60,6 +60,18 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   }>({ webGPU: null, whisper: null });
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
+  
+  // Add the missing state variables
+  const [showBatchEditModal, setShowBatchEditModal] = useState(false);
+  const [showDictionaryModal, setShowDictionaryModal] = useState(false);
+  const [batchEdits, setBatchEdits] = useState<BatchEdit[]>([]);
+  const [newBatchEdit, setNewBatchEdit] = useState<BatchEdit>({
+    searchText: '',
+    replaceText: '',
+    count: 0,
+    isRegex: false
+  });
+  const [slides, setSlides] = useState<SlideItem[]>([]);
 
   useEffect(() => {
     const initializeServices = async () => {
