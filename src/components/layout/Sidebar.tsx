@@ -1,6 +1,5 @@
 import React from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   Home,
@@ -17,7 +16,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ className }: SidebarProps) {
-  const router = useRouter();
+  const location = useLocation();
 
   const menuItems = [
     { href: '/', icon: Home, label: 'ホーム' },
@@ -33,11 +32,11 @@ export function Sidebar({ className }: SidebarProps) {
     <aside className={cn('w-64 bg-white border-r border-gray-200 h-screen', className)}>
       <nav className="p-4 space-y-2">
         {menuItems.map(({ href, icon: Icon, label }) => {
-          const isActive = router.pathname === href;
+          const isActive = location.pathname === href;
           return (
             <Link
               key={href}
-              href={href}
+              to={href}
               className={cn(
                 'flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors',
                 isActive

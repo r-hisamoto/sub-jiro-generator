@@ -64,6 +64,7 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   });
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
   const [slides, setSlides] = useState<SlideItem[]>([]);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const initializeServices = async () => {
@@ -95,7 +96,7 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
 
   const handleFileUpload = async (file: File) => {
     if (!services.whisper) {
-      setError('サービスが初期化されていません');
+      setError('音声解析サービスが初期化されていません');
       return;
     }
 
@@ -104,22 +105,39 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
     const isAudio = file.type.startsWith('audio/');
 
     if (!isVideo && !isAudio) {
-      setError('対応していないファイル形式です');
+      setError('対応していないファイル形式です。音声ファイル（MP3, WAV）または動画ファイル（MP4, WebM）をアップロードしてください。');
       return;
     }
 
     try {
       setIsLoading(true);
       setError(null);
-      const result = await services.whisper.transcribe(file) as WhisperResponse;
       
+      // 進捗状況の更新
+      const handleProgress = (progress: number) => {
+        console.log(`音声解析の進捗: ${progress}%`);
+        setProgress(progress);
+      };
+
+      // 音声解析の実行
+      console.log('音声解析を開始します:', { fileName: file.name, fileType: file.type, fileSize: file.size });
+      const result = await services.whisper.transcribe(file, handleProgress);
+      
+      if (!result) {
+        throw new Error('音声解析結果が空です');
+      }
+
       // 音声認識結果を時間情報付きで保存
-      const segments = result.segments.map((segment: WhisperSegment) => ({
+      const segments = result.segments?.map((segment: WhisperSegment) => ({
         text: applyDictionary(segment.text),
         startTime: segment.start,
         endTime: segment.end
-      }));
-      
+      })) || [];
+
+      if (segments.length === 0) {
+        throw new Error('音声認識結果のセグメントが空です');
+      }
+
       setTranscription(segments);
 
       // AIによる解析結果のレビュー
@@ -142,9 +160,11 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         setSubtitles(optimizeSubtitleTiming(directSubtitles));
       }
     } catch (error) {
-      setError('文字起こし処理に失敗しました');
+      console.error('音声解析エラー:', error);
+      setError(error instanceof Error ? error.message : '音声解析中にエラーが発生しました');
     } finally {
       setIsLoading(false);
+      setProgress(0);
     }
   };
 
