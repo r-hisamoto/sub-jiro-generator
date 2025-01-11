@@ -9,7 +9,7 @@ import { configDefaults } from 'vitest/config';
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8081,
+    port: 8080,
     timeout: 120000,
   },
   plugins: [
