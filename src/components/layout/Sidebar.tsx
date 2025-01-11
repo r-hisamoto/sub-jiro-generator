@@ -1,55 +1,47 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import {
-  Home,
-  FileAudio,
-  Settings,
-  HelpCircle,
-  Music,
-  Video,
-  Book
-} from 'lucide-react';
+import { Home, FileAudio, Music, Video, Book, Settings, HelpCircle } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
-interface SidebarProps {
-  className?: string;
-}
+const menuItems = [
+  { icon: Home, label: 'ホーム', href: '/' },
+  { icon: FileAudio, label: '音声文字起こし', href: '/transcribe' },
+  { icon: Music, label: 'BGM管理', href: '/bgm' },
+  { icon: Video, label: '動画管理', href: '/videos' },
+  { icon: Book, label: '辞書管理', href: '/dictionary' },
+  { icon: Settings, label: '設定', href: '/settings' },
+  { icon: HelpCircle, label: 'ヘルプ', href: '/help' }
+];
 
-export function Sidebar({ className }: SidebarProps) {
+export const Sidebar = () => {
   const location = useLocation();
 
-  const menuItems = [
-    { href: '/', icon: Home, label: 'ホーム' },
-    { href: '/transcribe', icon: FileAudio, label: '音声文字起こし' },
-    { href: '/bgm', icon: Music, label: 'BGM管理' },
-    { href: '/videos', icon: Video, label: '動画管理' },
-    { href: '/dictionary', icon: Book, label: '辞書管理' },
-    { href: '/settings', icon: Settings, label: '設定' },
-    { href: '/help', icon: HelpCircle, label: 'ヘルプ' },
-  ];
-
   return (
-    <aside className={cn('w-64 bg-white border-r border-gray-200 h-screen', className)}>
-      <nav className="p-4 space-y-2">
-        {menuItems.map(({ href, icon: Icon, label }) => {
-          const isActive = location.pathname === href;
-          return (
-            <Link
-              key={href}
-              to={href}
-              className={cn(
-                'flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors',
-                isActive
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              )}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="text-sm font-medium">{label}</span>
-            </Link>
-          );
-        })}
+    <aside className="fixed left-0 top-16 w-64 h-[calc(100vh-4rem)] bg-white border-r border-gray-200 overflow-y-auto">
+      <nav className="p-4">
+        <ul className="space-y-2">
+          {menuItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            const Icon = item.icon;
+            
+            return (
+              <li key={item.href}>
+                <Link
+                  to={item.href}
+                  className={`flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
     </aside>
   );
-} 
+}; 

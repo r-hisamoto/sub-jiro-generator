@@ -8,6 +8,7 @@ import type { Subtitle } from '@/types';
 import { DictionaryManager } from './DictionaryManager';
 import { applyDictionary } from '@/lib/dictionaryManager';
 import { SlideShowEditor, SlideItem } from './SlideShowEditor';
+import { PerformanceService } from '../services/performance/PerformanceService';
 
 interface TranscriptionResult {
   text: string;
@@ -71,21 +72,28 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
       try {
         setIsLoading(true);
         const webGPUService = new WebGPUService();
-        const isWebGPUAvailable = await webGPUService.initialize();
+        const performanceService = new PerformanceService();
         
-        if (!isWebGPUAvailable) {
-          console.warn('WebGPUが利用できません。CPUフォールバックを使用します。');
+        // OpenAI APIキーの取得
+        const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+        if (!apiKey) {
+          throw new Error('OpenAI APIキーが設定されていません');
         }
 
-        const whisperService = new WhisperService(webGPUService);
-        await whisperService.initialize();
+        // WhisperServiceの初期化
+        const whisperService = new WhisperService(
+          webGPUService,
+          performanceService,
+          apiKey
+        );
 
         setServices({
           webGPU: webGPUService,
           whisper: whisperService
         });
       } catch (error) {
-        setError('サービスの初期化に失敗しました');
+        console.error('サービスの初期化エラー:', error);
+        setError(error instanceof Error ? error.message : 'サービスの初期化に失敗しました');
       } finally {
         setIsLoading(false);
       }
@@ -127,12 +135,19 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         throw new Error('音声解析結果が空です');
       }
 
-      // 音声認識結果を時間情報付きで保存
-      const segments = result.segments?.map((segment: WhisperSegment) => ({
-        text: applyDictionary(segment.text),
-        startTime: segment.start,
-        endTime: segment.end
-      })) || [];
+      // 音声認識結果をセグメントに分割
+      const segments = result.split(/[。．.!！?？]/).filter(Boolean).map((text, index, array) => {
+        const segmentLength = text.length;
+        const totalLength = array.reduce((sum, t) => sum + t.length, 0);
+        const startTime = (index / array.length) * (file.size / 1024); // 簡易的な時間計算
+        const endTime = ((index + 1) / array.length) * (file.size / 1024);
+        
+        return {
+          text: applyDictionary(text.trim()),
+          startTime,
+          endTime
+        };
+      });
 
       if (segments.length === 0) {
         throw new Error('音声認識結果のセグメントが空です');
