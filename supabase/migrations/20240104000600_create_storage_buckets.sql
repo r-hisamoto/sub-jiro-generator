@@ -14,7 +14,7 @@ VALUES (
     'exports',
     'exports',
     false,
-    524288000, -- 500MB
+    2147483648, -- 2GB
     ARRAY['video/mp4', 'video/webm', 'application/xml', 'text/xml', 'text/vtt', 'text/srt', 'application/x-subrip']
 );
 
