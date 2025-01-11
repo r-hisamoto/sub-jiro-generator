@@ -33,8 +33,6 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
-  
-  // Add the missing state variables
   const [showBatchEditModal, setShowBatchEditModal] = useState(false);
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
   const [batchEdits, setBatchEdits] = useState<BatchEdit[]>([]);
@@ -52,17 +50,17 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
       setError(null);
       setProgress(0);
 
-      // Convert file to base64
-      const reader = new FileReader();
-      const audioData = await new Promise<ArrayBuffer>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as ArrayBuffer);
-        reader.onerror = reject;
-        reader.readAsArrayBuffer(file);
-      });
+      // Convert file to ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      // Convert ArrayBuffer to Base64
+      const base64Audio = btoa(
+        new Uint8Array(arrayBuffer)
+          .reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
 
       // Call Supabase Edge Function
       const { data, error: functionError } = await supabase.functions.invoke('transcribe', {
-        body: { audio: Array.from(new Uint8Array(audioData)) }
+        body: { audio: base64Audio }
       });
 
       if (functionError) {
