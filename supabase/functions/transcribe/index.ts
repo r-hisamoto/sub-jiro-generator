@@ -7,26 +7,38 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { audio } = await req.json()
+    console.log('Transcribe function called')
     
-    if (!audio) {
-      throw new Error('No audio data provided')
+    // Get form data from request
+    const formData = await req.formData()
+    const file = formData.get('file')
+
+    if (!file || !(file instanceof File)) {
+      console.error('No file provided in request')
+      return new Response(
+        JSON.stringify({ error: 'No file provided' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
     }
 
-    console.log('Received audio data, preparing for transcription');
+    console.log('Received file:', file.name, file.type, file.size)
 
-    // Prepare form data
-    const formData = new FormData()
-    formData.append('file', new Blob([audio]), 'audio.webm')
-    formData.append('model', 'whisper-1')
-    formData.append('language', 'ja')
+    // Prepare form data for OpenAI
+    const openAIFormData = new FormData()
+    openAIFormData.append('file', file)
+    openAIFormData.append('model', 'whisper-1')
+    openAIFormData.append('language', 'ja')
 
-    console.log('Sending request to OpenAI API');
+    console.log('Sending request to OpenAI API')
 
     // Send to OpenAI
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -34,17 +46,17 @@ serve(async (req) => {
       headers: {
         'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
       },
-      body: formData,
+      body: openAIFormData,
     })
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${errorText}`);
+      const errorText = await response.text()
+      console.error('OpenAI API error:', errorText)
+      throw new Error(`OpenAI API error: ${errorText}`)
     }
 
     const result = await response.json()
-    console.log('Transcription completed successfully');
+    console.log('Transcription completed successfully')
 
     return new Response(
       JSON.stringify({ text: result.text }),
@@ -52,7 +64,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Transcription error:', error);
+    console.error('Transcription error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       {

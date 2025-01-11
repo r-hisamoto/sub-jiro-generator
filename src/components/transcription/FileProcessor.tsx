@@ -27,53 +27,32 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         throw new Error('対応していないファイル形式です');
       }
 
-      // For files larger than 100MB, use chunked upload
-      if (file.size > 100 * 1024 * 1024) {
-        const chunks = divideFileIntoChunks(file, CHUNK_SIZE);
-        const uploadPath = `${crypto.randomUUID()}-${file.name.replace(/[^\x00-\x7F]/g, '')}`;
-        
-        // Create upload job
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('ユーザー認証が必要です');
-        
-        const jobId = await createVideoJob(file.name, file.size, uploadPath, user.id);
+      // Create form data
+      const formData = new FormData();
+      formData.append('file', file);
 
-        // Upload chunks
-        for (let i = 0; i < chunks.length; i++) {
-          const chunkPath = `${uploadPath}_chunk_${i}`;
-          await uploadChunk(chunks[i], chunkPath);
-          setProgress((i + 1) / chunks.length * 100);
-        }
+      console.log('Sending file to transcribe function');
 
-        // Start transcription
-        const { data, error } = await supabase.functions.invoke('transcribe', {
-          body: { jobId, uploadPath }
-        });
+      const { data, error } = await supabase.functions.invoke('transcribe', {
+        body: formData
+      });
 
-        if (error) throw error;
-        if (data?.text) {
-          onTranscriptionComplete(data.text);
-        }
-
-      } else {
-        // For smaller files, use direct upload
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const { data, error } = await supabase.functions.invoke('transcribe', {
-          body: formData
-        });
-
-        if (error) throw error;
-        if (data?.text) {
-          onTranscriptionComplete(data.text);
-        }
+      if (error) {
+        console.error('Transcribe function error:', error);
+        throw error;
       }
 
-      toast({
-        title: "アップロード完了",
-        description: "ファイルの処理が完了しました。",
-      });
+      if (data?.text) {
+        console.log('Transcription successful');
+        onTranscriptionComplete(data.text);
+        
+        toast({
+          title: "文字起こし完了",
+          description: "音声の文字起こしが完了しました。",
+        });
+      } else {
+        throw new Error('文字起こし結果が不正です');
+      }
 
     } catch (error) {
       console.error('Error in handleFileUpload:', error);
