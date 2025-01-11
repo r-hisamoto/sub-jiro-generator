@@ -8,7 +8,6 @@ import type { Subtitle } from '@/types';
 import { DictionaryManager } from './DictionaryManager';
 import { applyDictionary } from '@/lib/dictionaryManager';
 import { SlideShowEditor, SlideItem } from './SlideShowEditor';
-import { PerformanceService } from '../services/performance/PerformanceService';
 
 interface TranscriptionResult {
   text: string;
@@ -65,35 +64,27 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   });
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
   const [slides, setSlides] = useState<SlideItem[]>([]);
-  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const initializeServices = async () => {
       try {
         setIsLoading(true);
         const webGPUService = new WebGPUService();
-        const performanceService = new PerformanceService();
+        const isWebGPUAvailable = await webGPUService.initialize();
         
-        // OpenAI APIキーの取得
-        const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-        if (!apiKey) {
-          throw new Error('OpenAI APIキーが設定されていません');
+        if (!isWebGPUAvailable) {
+          console.warn('WebGPUが利用できません。CPUフォールバックを使用します。');
         }
 
-        // WhisperServiceの初期化
-        const whisperService = new WhisperService(
-          webGPUService,
-          performanceService,
-          apiKey
-        );
+        const whisperService = new WhisperService(webGPUService);
+        await whisperService.initialize();
 
         setServices({
           webGPU: webGPUService,
           whisper: whisperService
         });
       } catch (error) {
-        console.error('サービスの初期化エラー:', error);
-        setError(error instanceof Error ? error.message : 'サービスの初期化に失敗しました');
+        setError('サービスの初期化に失敗しました');
       } finally {
         setIsLoading(false);
       }
@@ -104,7 +95,7 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
 
   const handleFileUpload = async (file: File) => {
     if (!services.whisper) {
-      setError('音声解析サービスが初期化されていません');
+      setError('サービスが初期化されていません');
       return;
     }
 
@@ -113,46 +104,22 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
     const isAudio = file.type.startsWith('audio/');
 
     if (!isVideo && !isAudio) {
-      setError('対応していないファイル形式です。音声ファイル（MP3, WAV）または動画ファイル（MP4, WebM）をアップロードしてください。');
+      setError('対応していないファイル形式です');
       return;
     }
 
     try {
       setIsLoading(true);
       setError(null);
+      const result = await services.whisper.transcribe(file) as WhisperResponse;
       
-      // 進捗状況の更新
-      const handleProgress = (progress: number) => {
-        console.log(`音声解析の進捗: ${progress}%`);
-        setProgress(progress);
-      };
-
-      // 音声解析の実行
-      console.log('音声解析を開始します:', { fileName: file.name, fileType: file.type, fileSize: file.size });
-      const result = await services.whisper.transcribe(file, handleProgress);
+      // 音声認識結果を時間情報付きで保存
+      const segments = result.segments.map((segment: WhisperSegment) => ({
+        text: applyDictionary(segment.text),
+        startTime: segment.start,
+        endTime: segment.end
+      }));
       
-      if (!result) {
-        throw new Error('音声解析結果が空です');
-      }
-
-      // 音声認識結果をセグメントに分割
-      const segments = result.split(/[。．.!！?？]/).filter(Boolean).map((text, index, array) => {
-        const segmentLength = text.length;
-        const totalLength = array.reduce((sum, t) => sum + t.length, 0);
-        const startTime = (index / array.length) * (file.size / 1024); // 簡易的な時間計算
-        const endTime = ((index + 1) / array.length) * (file.size / 1024);
-        
-        return {
-          text: applyDictionary(text.trim()),
-          startTime,
-          endTime
-        };
-      });
-
-      if (segments.length === 0) {
-        throw new Error('音声認識結果のセグメントが空です');
-      }
-
       setTranscription(segments);
 
       // AIによる解析結果のレビュー
@@ -175,11 +142,9 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         setSubtitles(optimizeSubtitleTiming(directSubtitles));
       }
     } catch (error) {
-      console.error('音声解析エラー:', error);
-      setError(error instanceof Error ? error.message : '音声解析中にエラーが発生しました');
+      setError('文字起こし処理に失敗しました');
     } finally {
       setIsLoading(false);
-      setProgress(0);
     }
   };
 

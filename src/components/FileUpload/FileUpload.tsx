@@ -1,6 +1,5 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import { cn } from '@/lib/utils';
-import { Upload } from 'lucide-react';
 
 export interface FileUploadProps {
   className?: string;
@@ -12,74 +11,42 @@ export interface FileUploadProps {
 export const FileUpload: React.FC<FileUploadProps> = ({
   className,
   onFileSelect,
-  accept = 'audio/mpeg,audio/wav,audio/mp3,audio/mp4,video/mp4,video/webm,video/ogg',
-  maxSize = 1024 * 1024 * 1024 * 10, // 10GB
+  accept = 'video/*,audio/*',
+  maxSize = 1024 * 1024 * 100, // 100MB
 }) => {
-  const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     // ファイルサイズのチェック
     if (file.size > maxSize) {
-      alert(`ファイルサイズが大きすぎます（最大${Math.floor(maxSize / (1024 * 1024))}MB）`);
+      alert('ファイルサイズが大きすぎます');
       return;
     }
 
     // ファイル形式のチェック
     const acceptedTypes = accept.split(',').map(type => type.trim());
-    const fileType = file.type || `audio/${file.name.split('.').pop()?.toLowerCase()}`; // 拡張子からMIMEタイプを推測
-    console.log('File type:', fileType);
-
-    const isAcceptedType = acceptedTypes.some(type => {
-      // 拡張子での判定も追加
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      const acceptedExtensions = ['mp3', 'wav', 'mp4', 'webm', 'ogg'];
-      return type === fileType || (extension && acceptedExtensions.includes(extension));
-    });
-
-    if (!isAcceptedType) {
-      alert(`対応していないファイル形式です。MP3, WAV（音声）またはMP4, WebM（動画）をアップロードしてください。`);
+    const fileType = file.type;
+    if (!acceptedTypes.some(type => {
+      if (type.endsWith('/*')) {
+        return fileType.startsWith(type.replace('/*', ''));
+      }
+      return type === fileType;
+    })) {
+      alert('対応していないファイル形式です');
       return;
     }
 
-    console.log('Selected file:', file.name, fileType, file.size);
     onFileSelect(file);
-  }, [accept, maxSize, onFileSelect]);
-
-  const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      const changeEvent = {
-        target: {
-          files: event.dataTransfer.files
-        }
-      } as React.ChangeEvent<HTMLInputElement>;
-      handleFileChange(changeEvent);
-    }
-  }, [handleFileChange]);
-
-  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  }, []);
+  };
 
   return (
-    <div
-      className={cn(
-        'flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg',
-        'bg-gray-50 hover:bg-gray-100 transition-colors duration-200',
-        className
-      )}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-    >
+    <div className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg', className)}>
       <input
         type="file"
-        className="hidden"
-        accept=".mp3,.wav,.mp4,.webm,.ogg,audio/*,video/*"
+        data-testid="file-input"
+        className="absolute opacity-0"
+        accept={accept}
         onChange={handleFileChange}
         id="file-upload"
       />
@@ -87,16 +54,30 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         htmlFor="file-upload"
         className="flex flex-col items-center justify-center w-full h-full cursor-pointer"
       >
-        <Upload className="w-12 h-12 mb-4 text-gray-400" />
-        <p className="mb-2 text-lg font-semibold text-gray-700">
-          クリックまたはドラッグ＆ドロップ
-        </p>
-        <p className="text-sm text-gray-500">
-          音声ファイル（MP3, WAV）または動画ファイル（MP4, WebM）
-        </p>
-        <p className="mt-2 text-xs text-gray-400">
-          最大{Math.floor(maxSize / (1024 * 1024))}MBまで
-        </p>
+        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+          <svg
+            className="w-8 h-8 mb-4 text-gray-500"
+            aria-hidden="true"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 20 16"
+          >
+            <path
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+            />
+          </svg>
+          <p className="mb-2 text-sm text-gray-500">
+            <span className="font-semibold">クリックしてアップロード</span>
+            またはドラッグ&ドロップ
+          </p>
+          <p className="text-xs text-gray-500">
+            動画ファイル（MP4, MOV, AVI）または音声ファイル（MP3, WAV）
+          </p>
+        </div>
       </label>
     </div>
   );
