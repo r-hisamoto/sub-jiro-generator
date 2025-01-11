@@ -23,10 +23,10 @@ serve(async (req) => {
     }
 
     // Validate file type
-    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg']
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg', 'audio/mpeg', 'audio/mp3']
     if (!allowedTypes.includes(file.type)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid file type. Only MP4, WebM, and OGG video files are allowed.' }),
+        JSON.stringify({ error: '無効なファイル形式です。MP4、WebM、OGG形式の動画ファイル、またはMP3形式の音声ファイルのみ許可されています。' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
@@ -39,8 +39,11 @@ serve(async (req) => {
     const fileExt = file.name.split('.').pop()
     const filePath = `${crypto.randomUUID()}.${fileExt}`
 
+    // ファイルタイプに基づいてバケットを選択
+    const bucket = file.type.startsWith('audio/') ? 'audio' : 'videos'
+
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('videos')
+      .from(bucket)
       .upload(filePath, file, {
         contentType: file.type,
         upsert: false
