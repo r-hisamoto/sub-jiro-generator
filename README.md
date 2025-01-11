@@ -1,129 +1,69 @@
-# Sub Jiro Generator
+# Welcome to your Lovable project
 
-音声ファイルから字幕を自動生成し、高度な編集・管理機能を提供するWebアプリケーション
+## Project info
 
-## 主要機能
+**URL**: https://lovable.dev/projects/e7c96edf-f608-451d-bf4b-92aee893a9e9
 
-### 音声認識・文字起こし
-- WebGPU対応ブラウザでの高速処理
-- Hugging Face Whisperによる高精度な日本語音声認識
-- AIサービス連携とカスタマイズ
+## How can I edit this code?
 
-### メディア処理
-- 複数の音声・動画フォーマット対応
-- リアルタイム波形表示
-- BGM管理と音声効果
-- スライドショー生成
+There are several ways of editing your application.
 
-### 字幕編集・管理
-- タイムライン形式での編集
-- 音声波形との同期表示
-- リアルタイムプレビュー
-- 複数フォーマット対応
+**Use Lovable**
 
-### AI支援機能
-- 画像生成と解析
-- プロンプト自動生成
-- 辞書・用語管理
-- 自動修正機能
+Simply visit the [Lovable Project](https://lovable.dev/projects/e7c96edf-f608-451d-bf4b-92aee893a9e9) and start prompting.
 
-### チーム協業
-- リアルタイムコラボレーション
-- プロジェクト共有
-- 権限管理
-- アクティビティログ
+Changes made via Lovable will be committed automatically to this repo.
 
-## 必要要件
+**Use your preferred IDE**
 
-- Node.js 18.0.0以上
-- WebGPU対応ブラウザ（推奨）
-- Hugging Face APIキー
-- Replicate APIキー（AI画像生成用）
-- Supabase設定（データベース連携用）
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
-## インストール
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
-```bash
-# 依存パッケージのインストール
-npm install
+Follow these steps:
 
-# 開発サーバーの起動
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
-
-# ビルド
-npm run build
-
-# テストの実行
-npm test
 ```
 
-## 環境変数の設定
+**Edit a file directly in GitHub**
 
-`.env`ファイルを作成し、以下の環境変数を設定してください：
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-```env
-HUGGING_FACE_API_KEY=your_api_key_here
-REPLICATE_API_KEY=your_replicate_api_key
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-PEXELS_API_KEY=your_pexels_api_key
-PIXABAY_API_KEY=your_pixabay_api_key
-```
+**Use GitHub Codespaces**
 
-## 使用方法
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-1. アプリケーションを起動し、音声/動画ファイルをアップロード
-2. 自動で文字起こしが開始され、進捗状況が表示
-3. 文字起こし完了後、字幕エディタで編集
-4. 必要に応じてAI機能やフリー素材を活用
-5. 編集した字幕を保存・エクスポート
-6. チームメンバーと共有・コラボレーション
+## What technologies are used for this project?
 
-## 開発者向け情報
+This project is built with .
 
-### プロジェクト構成
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-```
-src/
-├── components/     # UIコンポーネント
-├── services/      # コアサービス
-├── hooks/         # カスタムフック
-├── lib/           # ユーティリティ
-├── types/         # 型定義
-├── pages/         # ページコンポーネント
-└── utils/         # ヘルパー関数
-```
+## How can I deploy this project?
 
-### 主要なサービス
+Simply open [Lovable](https://lovable.dev/projects/e7c96edf-f608-451d-bf4b-92aee893a9e9) and click on Share -> Publish.
 
-- `WhisperService`: 音声認識処理
-- `WebGPUService`: GPU処理の最適化
-- `PerformanceService`: パフォーマンス測定
-- `AIService`: AI機能の統合
-- `CollaborationService`: リアルタイム協業
+## I want to use a custom domain - is that possible?
 
-### テスト
-
-- ユニットテスト: `npm test`
-- E2Eテスト: `npm run test:e2e`
-- パフォーマンステスト: `npm run test:perf`
-
-## ライセンス
-
-MIT License
-
-## 貢献
-
-1. このリポジトリをフォーク
-2. 機能ブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add some amazing feature'`)
-4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを作成
-
-## 注意事項
-
-- WebGPU非対応環境では、Hugging Face APIを使用
-- 大きなファイルの処理には時間がかかる場合があります
-- メモリ使用量は自動的に最適化されます
-- オフライン機能は一部制限があります
-- APIキーは安全に管理してください
+We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 
 const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks
-const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
 const MAX_RETRIES = 3;
 const CONCURRENT_UPLOADS = 2;
 const BATCH_DELAY = 500; // 500ms delay between batches
@@ -54,7 +54,7 @@ export const useFileUpload = (onFileSelect: (result: { file: File; url: string }
 
   const uploadFile = async (file: File): Promise<string> => {
     if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`File size exceeds the maximum limit of 10GB`);
+      throw new Error(`File size exceeds the maximum limit of 5GB`);
     }
 
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();

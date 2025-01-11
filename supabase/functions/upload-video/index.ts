@@ -23,10 +23,10 @@ serve(async (req) => {
     }
 
     // Validate file type
-    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg', 'audio/mpeg', 'audio/mp3']
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/ogg']
     if (!allowedTypes.includes(file.type)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid file type. Only MP4, WebM, OGG video files and MP3 audio files are allowed.' }),
+        JSON.stringify({ error: 'Invalid file type. Only MP4, WebM, and OGG video files are allowed.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
