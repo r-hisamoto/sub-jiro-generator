@@ -4,6 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from './ui/button';
 import { FileUpload } from './FileUpload';
 import { Progress } from './ui/progress';
+import { Card } from './ui/card';
+import { LoadingSpinner } from './LoadingSpinner/LoadingSpinner';
 
 export const TranscriptionManager: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -87,41 +89,50 @@ export const TranscriptionManager: React.FC = () => {
 
   if (!isInitialized) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <div className="text-xl font-semibold text-gray-700">
+      <Card className="flex flex-col items-center justify-center min-h-[400px] p-8 space-y-4">
+        <div className="text-xl font-semibold text-gray-700 text-center">
           音声解析サービスが初期化されていません
         </div>
-        <Button onClick={initializeServices}>
+        <Button 
+          onClick={initializeServices}
+          className="mt-4"
+        >
           再試行
         </Button>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex flex-col items-center justify-center space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+    <div className="container mx-auto p-6">
+      <Card className="p-6 space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900 text-center">
           音声文字起こし
         </h1>
         
-        <div className="w-full max-w-2xl">
+        <div className="w-full max-w-2xl mx-auto">
           <FileUpload
             onFileSelect={handleFileSelect}
             accept="audio/*,video/*"
-            maxSize={25 * 1024 * 1024} // 25MB
+            className="w-full"
           />
         </div>
 
         {isProcessing && (
-          <div className="w-full max-w-2xl space-y-2">
+          <div className="w-full max-w-2xl mx-auto space-y-4">
             <Progress value={progress} className="w-full" />
             <p className="text-sm text-gray-600 text-center">
               処理中... {progress}%
             </p>
+            <LoadingSpinner 
+              message="音声を解析しています..."
+              progress={progress}
+              showPercentage={true}
+              size="md"
+            />
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 };
