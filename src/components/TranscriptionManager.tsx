@@ -12,35 +12,12 @@ import { PerformanceService } from '../services/performance/PerformanceService';
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriptionResult {
   text: string;
   startTime: number;
   endTime: number;
-}
-
-interface WhisperSegment {
-  text: string;
-  start: number;
-  end: number;
-}
-
-interface WhisperResponse {
-  segments: WhisperSegment[];
-}
-
-interface ReviewSuggestion {
-  originalText: string;
-  suggestedText: string;
-  confidence: number;
-  reason: string;
-}
-
-interface BatchEdit {
-  searchText: string;
-  replaceText: string;
-  count: number;
-  isRegex: boolean;
 }
 
 interface TranscriptionManagerProps {
@@ -54,10 +31,6 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   const [scriptText, setScriptText] = useState<string>('');
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([]);
-  const [services, setServices] = useState<{
-    webGPU: WebGPUService | null;
-    whisper: WhisperService | null;
-  }>({ webGPU: null, whisper: null });
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
   
@@ -73,125 +46,57 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   });
   const [slides, setSlides] = useState<SlideItem[]>([]);
 
-  useEffect(() => {
-    const initializeServices = async () => {
-      try {
-        setIsLoading(true);
-        const webGPUService = new WebGPUService();
-        const performanceService = new PerformanceService();
-        
-        // OpenAI APIキーの取得と確認
-        const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-        console.log('APIキーの状態:', {
-          exists: !!apiKey,
-          length: apiKey?.length || 0
-        });
-
-        if (!apiKey) {
-          throw new Error('OpenAI APIキーが設定されていません。環境変数を確認してください。');
-        }
-
-        // WhisperServiceの初期化
-        const whisperService = new WhisperService(
-          webGPUService,
-          performanceService,
-          apiKey
-        );
-
-        setServices({
-          webGPU: webGPUService,
-          whisper: whisperService
-        });
-      } catch (error) {
-        console.error('サービスの初期化エラー:', error);
-        setError(error instanceof Error ? error.message : 'サービスの初期化に失敗しました');
-        toast({
-          variant: "destructive",
-          title: "エラー",
-          description: error instanceof Error ? error.message : 'サービスの初期化に失敗しました',
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeServices();
-  }, [toast]);
-
   const handleFileUpload = async (file: File) => {
-    if (!services.whisper) {
-      setError('音声解析サービスが初期化されていません');
-      return;
-    }
-
-    // ファイルタイプのチェック
-    const isVideo = file.type.startsWith('video/');
-    const isAudio = file.type.startsWith('audio/');
-
-    if (!isVideo && !isAudio) {
-      setError('対応していないファイル形式です。音声ファイル（MP3, WAV）または動画ファイル（MP4, WebM）をアップロードしてください。');
-      return;
-    }
-
     try {
       setIsLoading(true);
       setError(null);
-      
-      // 進捗状況の更新
-      const handleProgress = (progress: number) => {
-        console.log(`音声解析の進捗: ${progress}%`);
-        setProgress(progress);
-      };
+      setProgress(0);
 
-      // 音声解析の実行
-      console.log('音声解析を開始します:', { 
-        fileName: file.name, 
-        fileType: file.type, 
-        fileSize: file.size,
-        hasWhisperService: !!services.whisper,
-        hasApiKey: !!services.whisper?.apiKey
+      // Convert file to base64
+      const reader = new FileReader();
+      const audioData = await new Promise<ArrayBuffer>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
       });
 
-      const result = await services.whisper.transcribe(file, handleProgress);
-      
-      if (!result) {
-        throw new Error('音声解析結果が空です');
+      // Call Supabase Edge Function
+      const { data, error: functionError } = await supabase.functions.invoke('transcribe', {
+        body: { audio: Array.from(new Uint8Array(audioData)) }
+      });
+
+      if (functionError) {
+        throw new Error(`Transcription failed: ${functionError.message}`);
       }
 
-      console.log('音声解析結果:', { result, length: result.length });
+      if (!data?.text) {
+        throw new Error('No transcription result received');
+      }
 
-      // 音声認識結果をセグメントに分割（句点で区切る）
-      const segments = result.split(/[。．.!！?？]/).filter(Boolean).map((text, index, array) => {
-        // 簡易的な時間計算（全体の長さを文の数で割って推定）
-        const duration = file.size / 1024 / array.length; // 1KBを1秒として計算
+      // Convert result to segments
+      const segments = data.text.split(/[。．.!！?？]/).filter(Boolean).map((text, index, array) => {
+        const duration = file.size / 1024 / array.length;
         const startTime = index * duration;
         const endTime = (index + 1) * duration;
         
         return {
-          text: applyDictionary(text.trim() + '。'), // 句点を追加
+          text: applyDictionary(text.trim() + '。'),
           startTime,
           endTime
         };
       });
 
-      if (segments.length === 0) {
-        throw new Error('音声認識結果のセグメントが空です');
-      }
-
-      console.log('音声認識結果をセグメントに分割:', segments);
       setTranscription(segments);
 
-      // AIによる解析結果のレビュー
+      // Generate reviews and subtitles
       const reviews = reviewTranscription(segments);
       setSuggestions(reviews);
 
-      // スクリプトテキストが既にある場合は照合を実行
       if (scriptText) {
         const matched = matchSubtitles(segments, scriptText);
         const optimized = optimizeSubtitleTiming(matched);
         setSubtitles(optimized);
       } else {
-        // スクリプトがない場合は音声認識結果から直接字幕を生成
         const directSubtitles = segments.map((segment, index) => ({
           id: `subtitle-${index}`,
           text: segment.text,
@@ -200,9 +105,19 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
         }));
         setSubtitles(optimizeSubtitleTiming(directSubtitles));
       }
+
+      toast({
+        title: "文字起こし完了",
+        description: "音声の文字起こしが完了しました。",
+      });
     } catch (error) {
-      console.error('音声解析エラー:', error);
+      console.error('Transcription error:', error);
       setError(error instanceof Error ? error.message : '音声解析中にエラーが発生しました');
+      toast({
+        variant: "destructive",
+        title: "エラー",
+        description: error instanceof Error ? error.message : '音声解析中にエラーが発生しました',
+      });
     } finally {
       setIsLoading(false);
       setProgress(0);
@@ -279,7 +194,6 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   const handleTextFileLoaded = (text: string) => {
     setScriptText(text);
     
-    // 音声認識結果が既にある場合は照合を実行
     if (transcription.length > 0) {
       const matched = matchSubtitles(transcription, text);
       const optimized = optimizeSubtitleTiming(matched);
@@ -288,7 +202,6 @@ export const TranscriptionManager: React.FC<TranscriptionManagerProps> = ({ mode
   };
 
   const handleDictionaryUpdate = () => {
-    // 辞書が更新されたら、現在の字幕に再適用
     if (subtitles.length > 0) {
       setSubtitles(current =>
         current.map(subtitle => ({
