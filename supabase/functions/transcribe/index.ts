@@ -18,11 +18,15 @@ serve(async (req) => {
       throw new Error('No audio data provided')
     }
 
+    console.log('Received audio data, preparing for transcription');
+
     // Prepare form data
     const formData = new FormData()
     formData.append('file', new Blob([audio]), 'audio.webm')
     formData.append('model', 'whisper-1')
     formData.append('language', 'ja')
+
+    console.log('Sending request to OpenAI API');
 
     // Send to OpenAI
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -34,10 +38,13 @@ serve(async (req) => {
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${await response.text()}`)
+      const errorText = await response.text();
+      console.error('OpenAI API error:', errorText);
+      throw new Error(`OpenAI API error: ${errorText}`);
     }
 
     const result = await response.json()
+    console.log('Transcription completed successfully');
 
     return new Response(
       JSON.stringify({ text: result.text }),
@@ -45,7 +52,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Transcription error:', error)
+    console.error('Transcription error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
