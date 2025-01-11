@@ -20,20 +20,28 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
     // ファイルサイズのチェック
     if (file.size > maxSize) {
-      alert('ファイルサイズが大きすぎます');
+      alert(`ファイルサイズが大きすぎます（最大${Math.floor(maxSize / (1024 * 1024))}MB）`);
       return;
     }
 
     // ファイル形式のチェック
     const acceptedTypes = accept.split(',').map(type => type.trim());
     const fileType = file.type;
-    if (!acceptedTypes.some(type => {
+    const isAcceptedType = acceptedTypes.some(type => {
       if (type.endsWith('/*')) {
-        return fileType.startsWith(type.replace('/*', ''));
+        const baseType = type.replace('/*', '');
+        return fileType.startsWith(baseType);
       }
       return type === fileType;
-    })) {
-      alert('対応していないファイル形式です');
+    });
+
+    if (!isAcceptedType) {
+      const typeList = acceptedTypes.map(type => {
+        if (type === 'audio/*') return '音声ファイル';
+        if (type === 'video/*') return '動画ファイル';
+        return type;
+      }).join('または');
+      alert(`対応していないファイル形式です。${typeList}をアップロードしてください。`);
       return;
     }
 
