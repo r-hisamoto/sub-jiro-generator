@@ -1,22 +1,69 @@
 import { WebGPUService } from '../webgpu/WebGPUService';
-import { HfInference } from '@huggingface/inference';
 import { PerformanceService } from '../performance/PerformanceService';
+
+const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+const MAX_PARALLEL_CHUNKS = 3; // 同時に処理するチャンクの最大数
 
 export type ProgressCallback = (progress: number) => void;
 
 export class WhisperService {
   private webGPUService: WebGPUService;
-  private hfInference: HfInference;
   private performanceService: PerformanceService;
+  private apiKey: string;
 
   constructor(
     webGPUService: WebGPUService,
-    hfInference: HfInference,
-    performanceService: PerformanceService
+    performanceService: PerformanceService,
+    apiKey: string
   ) {
+    if (!apiKey) {
+      throw new Error('OpenAI APIキーが設定されていません');
+    }
     this.webGPUService = webGPUService;
-    this.hfInference = hfInference;
     this.performanceService = performanceService;
+    this.apiKey = apiKey;
+  }
+
+  private async* splitAudioIntoChunks(audioData: ArrayBuffer): AsyncGenerator<Uint8Array> {
+    const data = new Uint8Array(audioData);
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+      yield data.slice(i, Math.min(i + CHUNK_SIZE, data.length));
+    }
+  }
+
+  private async transcribeChunk(chunk: Uint8Array): Promise<string> {
+    try {
+      const formData = new FormData();
+      formData.append('file', new Blob([chunk], { type: 'audio/mpeg' }), 'chunk.mp3');
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'ja');
+      formData.append('response_format', 'json');
+
+      console.log(`Processing chunk of size: ${chunk.length} bytes`);
+
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('OpenAI API error:', error);
+        throw new Error(`音声認識に失敗しました: ${error}`);
+      }
+
+      const result = await response.json();
+      if (!result.text) {
+        throw new Error('音声認識結果が空です');
+      }
+      return result.text;
+    } catch (error) {
+      console.error('Chunk transcription error:', error);
+      throw error;
+    }
   }
 
   async transcribe(
@@ -42,68 +89,53 @@ export class WhisperService {
         throw new Error('対応していないファイル形式です');
       }
 
-      const isWebGPUSupported = await this.webGPUService.isSupported();
-      let result: string;
+      onProgress?.(0);
 
-      if (isWebGPUSupported) {
-        try {
-          onProgress?.(0);
-          await this.webGPUService.initializeDevice();
-          result = await this.webGPUService.processAudio(file);
-          onProgress?.(50);
-          
-          // WebGPUの結果が空または無効な場合はHugging Face APIにフォールバック
-          if (!result || result === 'テスト文字起こし結果') {
-            console.log('WebGPU処理が不完全なため、Hugging Face APIにフォールバック');
-            result = await this.processWithHuggingFace(file);
-          }
-          onProgress?.(100);
-        } catch (error) {
-          console.warn('WebGPU処理でエラーが発生したため、Hugging Face APIにフォールバック:', error);
-          result = await this.processWithHuggingFace(file);
+      const audioData = await file.arrayBuffer();
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of this.splitAudioIntoChunks(audioData)) {
+        chunks.push(chunk);
+      }
+
+      let transcribedText = '';
+      let processedChunks = 0;
+
+      // チャンクを並列処理
+      for (let i = 0; i < chunks.length; i += MAX_PARALLEL_CHUNKS) {
+        const chunkGroup = chunks.slice(i, i + MAX_PARALLEL_CHUNKS);
+        const results = await Promise.all(
+          chunkGroup.map(async (chunk, index) => {
+            try {
+              console.log(`Processing chunk ${i + index + 1}/${chunks.length}`);
+              return await this.transcribeChunk(chunk);
+            } catch (error) {
+              console.error(`Chunk ${i + index + 1} failed:`, error);
+              return ''; // エラー時は空文字を返す
+            }
+          })
+        );
+
+        transcribedText += results.join(' ');
+        processedChunks += chunkGroup.length;
+        onProgress?.(Math.min((processedChunks / chunks.length) * 100, 100));
+
+        // メモリ解放のためにガベージコレクションを促す
+        if (i % (MAX_PARALLEL_CHUNKS * 2) === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
-      } else {
-        result = await this.processWithHuggingFace(file);
       }
 
-      return result;
-    } catch (error) {
-      if (signal?.aborted) {
-        throw new Error('処理がキャンセルされました');
+      if (!transcribedText.trim()) {
+        throw new Error('音声認識結果が空です');
       }
-      console.error('文字起こしエラー:', error);
-      throw error instanceof Error ? error : new Error('文字起こしに失敗しました');
+
+      onProgress?.(100);
+      return transcribedText.trim();
+    } catch (error) {
+      console.error('Transcription error:', error);
+      throw error;
     } finally {
-      const metrics = this.performanceService.endMeasurement('transcribe');
-      console.log('文字起こし性能メトリクス:', metrics);
-    }
-  }
-
-  private async processWithHuggingFace(file: File): Promise<string> {
-    try {
-      const formData = new FormData();
-      formData.append('audio', file);
-      formData.append('model', 'openai/whisper-large-v3');
-
-      const response = await fetch('https://api-inference.huggingface.co/models/openai/whisper-large-v3', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.HUGGING_FACE_API_KEY}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('API Response:', errorData);
-        throw new Error(`API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
-      }
-
-      const result = await response.json();
-      return result.text || '';
-    } catch (error) {
-      console.error('Hugging Face API エラー:', error);
-      throw new Error('Hugging Face APIでの処理に失敗しました');
+      this.performanceService.endMeasurement('transcribe');
     }
   }
 } 
