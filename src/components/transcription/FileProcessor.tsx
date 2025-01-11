@@ -3,6 +3,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from '../LoadingSpinner/LoadingSpinner';
 import { FileUpload } from '../FileUpload/FileUpload';
+import { CHUNK_SIZE } from '@/config/uploadConfig';
+import { divideFileIntoChunks, uploadChunk, createVideoJob } from '@/utils/uploadUtils';
 
 interface FileProcessorProps {
   onTranscriptionComplete: (text: string) => void;
@@ -13,68 +15,65 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
 
-  const processBase64Chunks = (arrayBuffer: ArrayBuffer, chunkSize = 32768) => {
-    const view = new Uint8Array(arrayBuffer);
-    const chunks: string[] = [];
-    
-    for (let i = 0; i < view.length; i += chunkSize) {
-      const chunk = view.slice(i, i + chunkSize);
-      const base64Chunk = btoa(
-        chunk.reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      chunks.push(base64Chunk);
-      
-      const currentProgress = Math.min(((i + chunkSize) / view.length) * 100, 100);
-      setProgress(currentProgress);
-    }
-    
-    return chunks.join('');
-  };
-
   const handleFileUpload = async (file: File) => {
     try {
       setIsLoading(true);
       setProgress(0);
 
-      const MAX_FILE_SIZE = 25 * 1024 * 1024;
-      if (file.size > MAX_FILE_SIZE) {
-        throw new Error('ファイルサイズが大きすぎます（最大25MB）');
-      }
+      console.log('Selected file:', file.name, file.type, file.size);
 
+      // File type validation
       if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
         throw new Error('対応していないファイル形式です');
       }
 
-      console.log('Starting file upload:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
+      // For files larger than 100MB, use chunked upload
+      if (file.size > 100 * 1024 * 1024) {
+        const chunks = divideFileIntoChunks(file, CHUNK_SIZE);
+        const uploadPath = `${crypto.randomUUID()}-${file.name.replace(/[^\x00-\x7F]/g, '')}`;
+        
+        // Create upload job
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('ユーザー認証が必要です');
+        
+        const jobId = await createVideoJob(file.name, file.size, uploadPath, user.id);
 
-      const arrayBuffer = await file.arrayBuffer();
-      const base64Audio = processBase64Chunks(arrayBuffer);
+        // Upload chunks
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkPath = `${uploadPath}_chunk_${i}`;
+          await uploadChunk(chunks[i], chunkPath);
+          setProgress((i + 1) / chunks.length * 100);
+        }
 
-      console.log('File converted to base64, starting transcription');
+        // Start transcription
+        const { data, error } = await supabase.functions.invoke('transcribe', {
+          body: { jobId, uploadPath }
+        });
 
-      const { data, error: functionError } = await supabase.functions.invoke('transcribe', {
-        body: { audio: base64Audio }
-      });
+        if (error) throw error;
+        if (data?.text) {
+          onTranscriptionComplete(data.text);
+        }
 
-      if (functionError) {
-        console.error('Transcription error:', functionError);
-        throw new Error(`文字起こしに失敗しました: ${functionError.message}`);
-      }
+      } else {
+        // For smaller files, use direct upload
+        const formData = new FormData();
+        formData.append('file', file);
 
-      if (!data?.text) {
-        throw new Error('文字起こし結果が取得できませんでした');
+        const { data, error } = await supabase.functions.invoke('transcribe', {
+          body: formData
+        });
+
+        if (error) throw error;
+        if (data?.text) {
+          onTranscriptionComplete(data.text);
+        }
       }
 
       toast({
-        title: "文字起こし完了",
-        description: "音声の文字起こしが完了しました。",
+        title: "アップロード完了",
+        description: "ファイルの処理が完了しました。",
       });
-
-      onTranscriptionComplete(data.text);
 
     } catch (error) {
       console.error('Error in handleFileUpload:', error);

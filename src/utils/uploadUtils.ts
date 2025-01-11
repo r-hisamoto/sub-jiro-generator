@@ -13,8 +13,8 @@ export const uploadChunk = async (
     const timeoutPromise = new Promise<UploadResult>((_, reject) => {
       setTimeout(() => {
         console.error(`Upload timeout for chunk: ${chunkPath}`);
-        reject(new Error('Upload timeout'));
-      }, UPLOAD_TIMEOUT * 2); // タイムアウト時間を2倍に延長
+        reject(new Error('アップロードがタイムアウトしました'));
+      }, UPLOAD_TIMEOUT);
     });
 
     const uploadPromise: Promise<UploadResult> = supabase.storage
@@ -37,7 +37,7 @@ export const uploadChunk = async (
     console.error(`Error uploading chunk ${chunkPath}:`, error);
     
     if (retryCount < RETRY_DELAYS.length) {
-      const delay = RETRY_DELAYS[retryCount] * 2; // リトライ間隔も2倍に延長
+      const delay = RETRY_DELAYS[retryCount];
       console.log(`Retrying chunk upload after ${delay}ms (attempt ${retryCount + 1}/${RETRY_DELAYS.length})`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return uploadChunk(chunk, chunkPath, retryCount + 1);
