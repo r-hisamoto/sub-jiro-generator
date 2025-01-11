@@ -12,7 +12,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   className,
   onFileSelect,
   accept = 'video/*,audio/*',
-  maxSize = 1024 * 1024 * 100, // 100MB
+  maxSize = 1024 * 1024 * 1024 * 10, // 10GB
 }) => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

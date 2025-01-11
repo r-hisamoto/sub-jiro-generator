@@ -4,7 +4,7 @@ VALUES (
     'subtitles',
     'subtitles',
     false,
-    52428800, -- 50MB
+    10737418240, -- 10GB
     ARRAY['text/vtt', 'text/srt', 'application/x-subrip', 'text/plain']
 );
 
@@ -14,7 +14,7 @@ VALUES (
     'exports',
     'exports',
     false,
-    2147483648, -- 2GB
+    10737418240, -- 10GB
     ARRAY['video/mp4', 'video/webm', 'application/xml', 'text/xml', 'text/vtt', 'text/srt', 'application/x-subrip']
 );
 
@@ -24,7 +24,7 @@ VALUES (
     'temp',
     'temp',
     false,
-    1073741824, -- 1GB
+    10737418240, -- 10GB
     ARRAY['video/mp4', 'video/webm', 'audio/mpeg', 'audio/wav', 'application/octet-stream']
 );
 
