@@ -3,8 +3,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from '../LoadingSpinner/LoadingSpinner';
 import { FileUpload } from '../FileUpload/FileUpload';
-import { CHUNK_SIZE } from '@/config/uploadConfig';
-import { divideFileIntoChunks, uploadChunk, createVideoJob } from '@/utils/uploadUtils';
+
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB limit
 
 interface FileProcessorProps {
   onTranscriptionComplete: (text: string) => void;
@@ -22,6 +22,11 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
       console.log('Selected file:', file.name, file.type, file.size);
 
+      // File size validation
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error('ファイルサイズが大きすぎます (最大100MB)');
+      }
+
       // File type validation
       if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
         throw new Error('対応していないファイル形式です');
@@ -34,11 +39,15 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
       console.log('Sending file to transcribe function');
 
       const { data, error } = await supabase.functions.invoke('transcribe', {
-        body: formData
+        body: formData,
+        responseType: 'json'
       });
 
       if (error) {
         console.error('Transcribe function error:', error);
+        if (error.message.includes('WORKER_LIMIT')) {
+          throw new Error('ファイルの処理に失敗しました。ファイルサイズを小さくするか、後でもう一度お試しください。');
+        }
         throw error;
       }
 
@@ -62,7 +71,6 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         title: "エラー",
         description: errorMessage,
       });
-      throw error;
     } finally {
       setIsLoading(false);
       setProgress(0);

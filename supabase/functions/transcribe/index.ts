@@ -40,28 +40,47 @@ serve(async (req) => {
 
     console.log('Sending request to OpenAI API')
 
-    // Send to OpenAI
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-      },
-      body: openAIFormData,
-    })
+    // Send to OpenAI with timeout
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('OpenAI API error:', errorText)
-      throw new Error(`OpenAI API error: ${errorText}`)
+    try {
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        },
+        body: openAIFormData,
+        signal: controller.signal
+      })
+
+      clearTimeout(timeout)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('OpenAI API error:', errorText)
+        throw new Error(`OpenAI API error: ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('Transcription completed successfully')
+
+      return new Response(
+        JSON.stringify({ text: result.text }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return new Response(
+          JSON.stringify({ error: 'Request timeout' }),
+          { 
+            status: 408,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        )
+      }
+      throw error
     }
-
-    const result = await response.json()
-    console.log('Transcription completed successfully')
-
-    return new Response(
-      JSON.stringify({ text: result.text }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
 
   } catch (error) {
     console.error('Transcription error:', error)
