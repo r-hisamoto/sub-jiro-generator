@@ -31,6 +31,13 @@ export class WhisperService {
     this.performanceService.startMeasurement('transcribe');
 
     try {
+      console.log('WhisperService: 音声解析開始', {
+        apiKey: this.apiKey ? '設定済み' : '未設定',
+        fileSize: file.size,
+        fileType: file.type,
+        fileName: file.name
+      });
+
       if (signal?.aborted) {
         throw new Error('処理がキャンセルされました');
       }
@@ -53,17 +60,6 @@ export class WhisperService {
 
       onProgress?.(0);
 
-      // ファイルの読み込みチェック
-      let arrayBuffer: ArrayBuffer;
-      try {
-        arrayBuffer = await file.arrayBuffer();
-        if (arrayBuffer.byteLength === 0) {
-          throw new Error('ファイルの内容が空です');
-        }
-      } catch (error) {
-        throw new Error(`ファイルの読み込みに失敗しました: ${error.message}`);
-      }
-
       // FormDataの作成
       const formData = new FormData();
       formData.append('file', file);
@@ -71,37 +67,35 @@ export class WhisperService {
       formData.append('language', 'ja');
       formData.append('response_format', 'json');
 
-      console.log('音声解析を開始します:', {
-        fileSize: file.size,
-        fileType: file.type,
-        fileName: file.name
+      console.log('WhisperService: APIリクエスト準備完了', {
+        model: 'whisper-1',
+        language: 'ja',
+        response_format: 'json'
       });
 
       onProgress?.(10);
 
       // APIリクエスト
-      let response: Response;
-      try {
-        response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`
-          },
-          body: formData,
-          signal
-        });
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          throw new Error('処理がキャンセルされました');
-        }
-        throw new Error(`APIリクエストに失敗しました: ${error.message}`);
-      }
+      console.log('WhisperService: APIリクエスト開始');
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: formData,
+        signal
+      });
+
+      console.log('WhisperService: APIレスポンス受信', {
+        status: response.status,
+        statusText: response.statusText
+      });
 
       onProgress?.(50);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Whisper API エラー:', {
+        console.error('WhisperService: APIエラー', {
           status: response.status,
           statusText: response.statusText,
           error: errorText
@@ -112,16 +106,16 @@ export class WhisperService {
       let result;
       try {
         result = await response.json();
+        console.log('WhisperService: 解析結果', result);
       } catch (error) {
-        throw new Error(`APIレスポンスの解析に失敗しました: ${error.message}`);
+        console.error('WhisperService: JSONパースエラー', error);
+        throw new Error(`APIレスポンスの解析に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-
-      console.log('音声解析結果:', result);
 
       onProgress?.(90);
 
       if (!result || !result.text) {
-        console.error('Whisper APIからの応答が不正です:', result);
+        console.error('WhisperService: 不正な応答', result);
         throw new Error('音声認識結果が不正です');
       }
 
@@ -130,11 +124,11 @@ export class WhisperService {
         throw new Error('音声認識結果が空文字列です');
       }
 
-      console.log('音声解析が完了しました');
+      console.log('WhisperService: 音声解析完了', { textLength: text.length });
       onProgress?.(100);
       return text;
     } catch (error) {
-      console.error('音声解析エラー:', error);
+      console.error('WhisperService: エラー発生', error);
       throw error;
     } finally {
       this.isProcessing = false;
