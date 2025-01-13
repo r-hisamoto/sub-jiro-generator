@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from '../LoadingSpinner/LoadingSpinner';
 import { FileUpload } from '../FileUpload/FileUpload';
 import FileUploadProgress from '../FileUploadProgress';
+import { useVideoUpload } from '@/hooks/useVideoUpload';
 
 interface FileProcessorProps {
   onTranscriptionComplete: (text: string) => void;
@@ -20,6 +21,7 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
     status: ''
   });
   const { toast } = useToast();
+  const { uploadVideo } = useVideoUpload();
 
   const handleFileUpload = async (file: File) => {
     try {
@@ -35,38 +37,59 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
       console.log('Selected file:', file.name, file.type, file.size);
 
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', file);
-
-      console.log('Sending file to transcribe function');
-      
       setUploadProgress(prev => ({
         ...prev,
         status: 'ファイルをアップロード中...'
       }));
 
-      const { data, error } = await supabase.functions.invoke('transcribe', {
-        body: formData,
-        responseType: 'json'
-      });
-
-      if (error) {
-        console.error('Transcribe function error:', error);
-        throw error;
+      // Use the video upload hook for large file handling
+      const jobId = await uploadVideo(file);
+      
+      if (!jobId) {
+        throw new Error('アップロードに失敗しました');
       }
 
-      if (data?.text) {
-        console.log('Transcription successful');
-        onTranscriptionComplete(data.text);
-        
-        toast({
-          title: "文字起こし完了",
-          description: "音声の文字起こしが完了しました。",
-        });
-      } else {
-        throw new Error('文字起こし結果が不正です');
-      }
+      // Poll for job completion
+      const checkJobStatus = async () => {
+        const { data: job, error: jobError } = await supabase
+          .from('video_jobs')
+          .select('*')
+          .eq('id', jobId)
+          .single();
+
+        if (jobError) {
+          throw jobError;
+        }
+
+        if (job.status === 'completed') {
+          if (job.output_path) {
+            onTranscriptionComplete(job.output_path);
+            toast({
+              title: "文字起こし完了",
+              description: "音声の文字起こしが完了しました。",
+            });
+          }
+          return true;
+        } else if (job.status === 'failed') {
+          throw new Error(job.error || 'ファイルの処理に失敗しました');
+        }
+
+        return false;
+      };
+
+      // Poll every 5 seconds until the job is complete
+      const pollInterval = setInterval(async () => {
+        try {
+          const isComplete = await checkJobStatus();
+          if (isComplete) {
+            clearInterval(pollInterval);
+            setIsLoading(false);
+          }
+        } catch (error) {
+          clearInterval(pollInterval);
+          throw error;
+        }
+      }, 5000);
 
     } catch (error) {
       console.error('Error in handleFileUpload:', error);

@@ -46,52 +46,53 @@ serve(async (req) => {
       )
     }
 
-    // Upload file to storage
-    const fileExt = file.name.split('.').pop()
-    const filePath = `${user.id}/${crypto.randomUUID()}.${fileExt}`
-
-    console.log(`Uploading file to storage: ${filePath}`);
-
-    const { error: uploadError } = await supabase.storage
-      .from('videos')
-      .upload(filePath, file, {
-        contentType: file.type,
-        upsert: false
-      })
-
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      return new Response(
-        JSON.stringify({ error: 'ファイルのアップロードに失敗しました', details: uploadError }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      )
-    }
-
-    // Create video record
-    const { error: dbError } = await supabase
-      .from('videos')
+    // Create a video job
+    const { data: job, error: jobError } = await supabase
+      .from('video_jobs')
       .insert({
-        title: file.name,
-        file_path: filePath,
-        content_type: file.type,
-        size: file.size,
         user_id: user.id,
+        status: 'pending',
+        metadata: {
+          filename: file.name,
+          filesize: file.size,
+          content_type: file.type
+        },
+        upload_path: `${user.id}/${crypto.randomUUID()}`
       })
+      .select()
+      .single()
 
-    if (dbError) {
-      console.error('Database insert error:', dbError);
+    if (jobError) {
+      console.error('Failed to create video job:', jobError);
       return new Response(
-        JSON.stringify({ error: 'データベースの更新に失敗しました', details: dbError }),
+        JSON.stringify({ error: 'ジョブの作成に失敗しました', details: jobError }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
     }
 
-    // For now, return a mock transcription result
-    // TODO: Implement actual transcription logic
+    // Add to processing queue
+    const { error: queueError } = await supabase
+      .from('processing_queue')
+      .insert({
+        job_id: job.id,
+        upload_path: job.upload_path,
+        total_chunks: 1,
+        metadata: job.metadata,
+        status: 'pending'
+      })
+
+    if (queueError) {
+      console.error('Failed to add to processing queue:', queueError);
+      return new Response(
+        JSON.stringify({ error: 'キューへの追加に失敗しました', details: queueError }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      )
+    }
+
     return new Response(
       JSON.stringify({
-        text: "テスト文字起こし結果です。",
-        filePath
+        jobId: job.id,
+        message: 'ファイルの処理を開始しました'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     )
