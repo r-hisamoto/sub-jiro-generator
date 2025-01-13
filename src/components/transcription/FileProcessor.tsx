@@ -3,8 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from '../LoadingSpinner/LoadingSpinner';
 import { FileUpload } from '../FileUpload/FileUpload';
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB limit
+import FileUploadProgress from '../FileUploadProgress';
 
 interface FileProcessorProps {
   onTranscriptionComplete: (text: string) => void;
@@ -12,25 +11,29 @@ interface FileProcessorProps {
 
 export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState({
+    bytesUploaded: 0,
+    totalBytes: 0,
+    percentage: 0,
+    currentChunk: 0,
+    totalChunks: 1,
+    status: ''
+  });
   const { toast } = useToast();
 
   const handleFileUpload = async (file: File) => {
     try {
       setIsLoading(true);
-      setProgress(0);
+      setUploadProgress({
+        bytesUploaded: 0,
+        totalBytes: file.size,
+        percentage: 0,
+        currentChunk: 0,
+        totalChunks: 1,
+        status: 'アップロード準備中...'
+      });
 
       console.log('Selected file:', file.name, file.type, file.size);
-
-      // File size validation
-      if (file.size > MAX_FILE_SIZE) {
-        throw new Error(`ファイルサイズが制限を超えています (最大10GB)`);
-      }
-
-      // File type validation
-      if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
-        throw new Error('対応していないファイル形式です');
-      }
 
       // Create form data
       const formData = new FormData();
@@ -38,11 +41,10 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
       console.log('Sending file to transcribe function');
       
-      // Show upload started toast
-      toast({
-        title: "アップロード開始",
-        description: "ファイルをアップロードしています...",
-      });
+      setUploadProgress(prev => ({
+        ...prev,
+        status: 'ファイルをアップロード中...'
+      }));
 
       const { data, error } = await supabase.functions.invoke('transcribe', {
         body: formData,
@@ -51,9 +53,6 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
       if (error) {
         console.error('Transcribe function error:', error);
-        if (error.message.includes('WORKER_LIMIT')) {
-          throw new Error('ファイルの処理に失敗しました。後でもう一度お試しください。');
-        }
         throw error;
       }
 
@@ -71,7 +70,10 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
     } catch (error) {
       console.error('Error in handleFileUpload:', error);
-      const errorMessage = error instanceof Error ? error.message : '予期せぬエラーが発生しました';
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'ファイルのアップロード中にエラーが発生しました';
+      
       toast({
         variant: "destructive",
         title: "エラー",
@@ -79,7 +81,10 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
       });
     } finally {
       setIsLoading(false);
-      setProgress(0);
+      setUploadProgress(prev => ({
+        ...prev,
+        status: ''
+      }));
     }
   };
 
@@ -94,10 +99,10 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
       {isLoading && (
         <div className="mt-4">
           <LoadingSpinner
-            message="処理中..."
-            progress={progress}
-            showPercentage
+            message={uploadProgress.status || "処理中..."}
+            size="md"
           />
+          <FileUploadProgress progress={uploadProgress} />
         </div>
       )}
     </div>
