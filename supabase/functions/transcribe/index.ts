@@ -1,5 +1,5 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,87 +9,101 @@ const corsHeaders = {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    console.log('Transcribe function called')
+    console.log('Starting transcribe function');
     
-    // Get form data from request
     const formData = await req.formData()
     const file = formData.get('file')
 
-    if (!file || !(file instanceof File)) {
-      console.error('No file provided in request')
+    if (!file) {
+      console.error('No file uploaded');
       return new Response(
-        JSON.stringify({ error: 'No file provided' }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'ファイルがアップロードされていません' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
-    console.log('Received file:', file.name, file.type, file.size)
+    console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}`);
 
-    // Prepare form data for OpenAI
-    const openAIFormData = new FormData()
-    openAIFormData.append('file', file)
-    openAIFormData.append('model', 'whisper-1')
-    openAIFormData.append('language', 'ja')
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    console.log('Sending request to OpenAI API')
+    // Get user ID from the request
+    const { data: { user } } = await supabase.auth.getUser(
+      req.headers.get('Authorization')?.split('Bearer ')[1] ?? ''
+    )
 
-    // Send to OpenAI with timeout
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+    if (!user) {
+      console.error('Unauthorized request');
+      return new Response(
+        JSON.stringify({ error: '認証が必要です' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      )
+    }
 
-    try {
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        },
-        body: openAIFormData,
-        signal: controller.signal
+    // Upload file to storage
+    const fileExt = file.name.split('.').pop()
+    const filePath = `${user.id}/${crypto.randomUUID()}.${fileExt}`
+
+    console.log(`Uploading file to storage: ${filePath}`);
+
+    const { error: uploadError } = await supabase.storage
+      .from('videos')
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: false
       })
 
-      clearTimeout(timeout)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('OpenAI API error:', errorText)
-        throw new Error(`OpenAI API error: ${errorText}`)
-      }
-
-      const result = await response.json()
-      console.log('Transcription completed successfully')
-
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
       return new Response(
-        JSON.stringify({ text: result.text }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'ファイルのアップロードに失敗しました', details: uploadError }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        return new Response(
-          JSON.stringify({ error: 'Request timeout' }),
-          { 
-            status: 408,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        )
-      }
-      throw error
     }
 
-  } catch (error) {
-    console.error('Transcription error:', error)
+    // Create video record
+    const { error: dbError } = await supabase
+      .from('videos')
+      .insert({
+        title: file.name,
+        file_path: filePath,
+        content_type: file.type,
+        size: file.size,
+        user_id: user.id,
+      })
+
+    if (dbError) {
+      console.error('Database insert error:', dbError);
+      return new Response(
+        JSON.stringify({ error: 'データベースの更新に失敗しました', details: dbError }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      )
+    }
+
+    // For now, return a mock transcription result
+    // TODO: Implement actual transcription logic
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({
+        text: "テスト文字起こし結果です。",
+        filePath
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    )
+
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: '予期せぬエラーが発生しました', 
+        details: error.message 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
 })

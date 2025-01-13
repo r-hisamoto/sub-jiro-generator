@@ -37,6 +37,12 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
       formData.append('file', file);
 
       console.log('Sending file to transcribe function');
+      
+      // Show upload started toast
+      toast({
+        title: "アップロード開始",
+        description: "ファイルをアップロードしています...",
+      });
 
       const { data, error } = await supabase.functions.invoke('transcribe', {
         body: formData,
