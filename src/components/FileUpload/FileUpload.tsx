@@ -7,6 +7,7 @@ export interface FileUploadProps {
   onFileSelect: (file: File) => void;
   accept?: string;
   maxSize?: number;
+  disabled?: boolean;
 }
 
 export const FileUpload: React.FC<FileUploadProps> = ({
@@ -14,6 +15,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   onFileSelect,
   accept = 'audio/mpeg,audio/wav,audio/mp3,audio/mp4,video/mp4,video/webm,video/ogg',
   maxSize = 1024 * 1024 * 1024 * 10, // 10GB
+  disabled = false,
 }) => {
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -21,7 +23,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
     // ファイルサイズのチェック
     if (file.size > maxSize) {
-      alert(`ファイルサイズが大きすぎます（最大${Math.floor(maxSize / (1024 * 1024))}MB）`);
+      alert(`ファイルサイズが大きすぎます（最大${Math.floor(maxSize / (1024 * 1024 * 1024))}GB）`);
       return;
     }
 
@@ -71,6 +73,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       className={cn(
         'flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg',
         'bg-gray-50 hover:bg-gray-100 transition-colors duration-200',
+        disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
       onDrop={handleDrop}
@@ -82,10 +85,14 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         accept=".mp3,.wav,.mp4,.webm,.ogg,audio/*,video/*"
         onChange={handleFileChange}
         id="file-upload"
+        disabled={disabled}
       />
       <label
         htmlFor="file-upload"
-        className="flex flex-col items-center justify-center w-full h-full cursor-pointer"
+        className={cn(
+          "flex flex-col items-center justify-center w-full h-full",
+          disabled ? "cursor-not-allowed" : "cursor-pointer"
+        )}
       >
         <Upload className="w-12 h-12 mb-4 text-gray-400" />
         <p className="mb-2 text-lg font-semibold text-gray-700">
@@ -95,9 +102,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           音声ファイル（MP3, WAV）または動画ファイル（MP4, WebM）
         </p>
         <p className="mt-2 text-xs text-gray-400">
-          最大{Math.floor(maxSize / (1024 * 1024))}MBまで
+          最大{Math.floor(maxSize / (1024 * 1024 * 1024))}GBまで
         </p>
       </label>
     </div>
   );
-}; 
+};

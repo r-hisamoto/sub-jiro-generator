@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LoadingSpinner } from '../LoadingSpinner/LoadingSpinner';
 import { FileUpload } from '../FileUpload/FileUpload';
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB limit
+const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB limit
 
 interface FileProcessorProps {
   onTranscriptionComplete: (text: string) => void;
@@ -24,7 +24,7 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
       // File size validation
       if (file.size > MAX_FILE_SIZE) {
-        throw new Error('ファイルサイズが大きすぎます (最大100MB)');
+        throw new Error(`ファイルサイズが制限を超えています (最大10GB)`);
       }
 
       // File type validation
@@ -46,7 +46,7 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
       if (error) {
         console.error('Transcribe function error:', error);
         if (error.message.includes('WORKER_LIMIT')) {
-          throw new Error('ファイルの処理に失敗しました。ファイルサイズを小さくするか、後でもう一度お試しください。');
+          throw new Error('ファイルの処理に失敗しました。後でもう一度お試しください。');
         }
         throw error;
       }
