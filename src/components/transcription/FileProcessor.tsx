@@ -21,11 +21,15 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
     status: ''
   });
   const { toast } = useToast();
-  const { uploadVideo } = useVideoUpload();
+  const { uploadVideo, uploadProgress: videoUploadProgress } = useVideoUpload();
 
   const handleFileUpload = async (file: File) => {
     try {
-      console.log('Selected file:', file.name, file.type, file.size);
+      console.log('Starting file upload:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
 
       setIsLoading(true);
       setUploadProgress({
@@ -33,7 +37,7 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         totalBytes: file.size,
         percentage: 0,
         currentChunk: 0,
-        totalChunks: 1,
+        totalChunks: Math.ceil(file.size / (5 * 1024 * 1024)), // 5MB chunks
         status: 'アップロード準備中...'
       });
 
@@ -63,6 +67,14 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
       console.log('Upload successful, job ID:', jobId);
 
+      // Update progress based on videoUploadProgress
+      setUploadProgress(prev => ({
+        ...prev,
+        bytesUploaded: videoUploadProgress * file.size,
+        percentage: videoUploadProgress * 100,
+        status: 'ファイル処理中...'
+      }));
+
       // Poll for job completion
       const checkJobStatus = async () => {
         console.log('Checking job status for ID:', jobId);
@@ -88,8 +100,10 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
               description: "音声の文字起こしが完了しました。",
             });
           }
+          setIsLoading(false);
           return true;
         } else if (job.status === 'failed') {
+          setIsLoading(false);
           throw new Error(job.error || 'ファイルの処理に失敗しました');
         }
 
@@ -103,7 +117,6 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
           if (isComplete) {
             console.log('Job completed successfully');
             clearInterval(pollInterval);
-            setIsLoading(false);
           }
         } catch (error) {
           console.error('Error in job status polling:', error);

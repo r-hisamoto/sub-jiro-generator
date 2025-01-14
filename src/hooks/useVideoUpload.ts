@@ -48,8 +48,8 @@ export const useVideoUpload = () => {
           const uploadPromise = uploadChunk(chunk, chunkPath)
             .then(() => {
               completedChunks++;
-              const progress = Math.min((completedChunks / chunks.length) * 100, 100);
-              console.log(`Chunk ${chunkIndex + 1} uploaded successfully. Progress: ${progress}%`);
+              const progress = Math.min((completedChunks / chunks.length), 1);
+              console.log(`Chunk ${chunkIndex + 1} uploaded successfully. Progress: ${progress * 100}%`);
               setUploadProgress(progress);
               activeUploads.delete(uploadPromise);
             })
