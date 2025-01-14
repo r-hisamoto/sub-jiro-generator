@@ -25,6 +25,12 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
   const handleFileUpload = async (file: File) => {
     try {
+      console.log('Starting file upload:', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
+
       setIsLoading(true);
       setUploadProgress({
         bytesUploaded: 0,
@@ -35,22 +41,36 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         status: 'アップロード準備中...'
       });
 
-      console.log('Selected file:', file.name, file.type, file.size);
+      // Check file size
+      const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error('ファイルサイズが大きすぎます（最大100MB）');
+      }
+
+      // Validate file type
+      const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/mp4', 'video/mp4', 'video/webm'];
+      if (!validTypes.includes(file.type)) {
+        throw new Error('対応していないファイル形式です。MP3、WAV、MP4、WebMファイルのみ対応しています。');
+      }
 
       setUploadProgress(prev => ({
         ...prev,
         status: 'ファイルをアップロード中...'
       }));
 
-      // Use the video upload hook for large file handling
+      console.log('Uploading file to Supabase storage...');
       const jobId = await uploadVideo(file);
       
       if (!jobId) {
         throw new Error('アップロードに失敗しました');
       }
 
+      console.log('File uploaded successfully, job ID:', jobId);
+
       // Poll for job completion
       const checkJobStatus = async () => {
+        console.log('Checking job status for ID:', jobId);
+        
         const { data: job, error: jobError } = await supabase
           .from('video_jobs')
           .select('*')
@@ -58,8 +78,11 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
           .single();
 
         if (jobError) {
+          console.error('Error checking job status:', jobError);
           throw jobError;
         }
+
+        console.log('Job status:', job.status);
 
         if (job.status === 'completed') {
           if (job.output_path) {
@@ -82,10 +105,12 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         try {
           const isComplete = await checkJobStatus();
           if (isComplete) {
+            console.log('Job completed successfully');
             clearInterval(pollInterval);
             setIsLoading(false);
           }
         } catch (error) {
+          console.error('Error in job status polling:', error);
           clearInterval(pollInterval);
           throw error;
         }

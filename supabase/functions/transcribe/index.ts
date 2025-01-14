@@ -28,12 +28,32 @@ serve(async (req) => {
 
     console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}`);
 
+    // Validate file size
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    if (file.size > MAX_FILE_SIZE) {
+      console.error(`File size ${file.size} exceeds maximum allowed size ${MAX_FILE_SIZE}`);
+      return new Response(
+        JSON.stringify({ error: 'ファイルサイズが大きすぎます（最大100MB）' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
+    // Validate file type
+    const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/mp4', 'video/mp4', 'video/webm'];
+    if (!validTypes.includes(file.type)) {
+      console.error(`Invalid file type: ${file.type}`);
+      return new Response(
+        JSON.stringify({ error: '対応していないファイル形式です。MP3、WAV、MP4、WebMファイルのみ対応しています。' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get user ID from the request
+    console.log('Authenticating user...');
     const { data: { user } } = await supabase.auth.getUser(
       req.headers.get('Authorization')?.split('Bearer ')[1] ?? ''
     )
@@ -46,7 +66,7 @@ serve(async (req) => {
       )
     }
 
-    // Create a video job
+    console.log('Creating video job...');
     const { data: job, error: jobError } = await supabase
       .from('video_jobs')
       .insert({
@@ -70,7 +90,7 @@ serve(async (req) => {
       )
     }
 
-    // Add to processing queue
+    console.log('Adding to processing queue...');
     const { error: queueError } = await supabase
       .from('processing_queue')
       .insert({
@@ -89,6 +109,7 @@ serve(async (req) => {
       )
     }
 
+    console.log('Job created successfully:', job.id);
     return new Response(
       JSON.stringify({
         jobId: job.id,
