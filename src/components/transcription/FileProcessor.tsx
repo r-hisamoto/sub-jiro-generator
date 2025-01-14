@@ -37,17 +37,15 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         totalBytes: file.size,
         percentage: 0,
         currentChunk: 0,
-        totalChunks: Math.ceil(file.size / (5 * 1024 * 1024)), // 5MB chunks
+        totalChunks: Math.ceil(file.size / (5 * 1024 * 1024)),
         status: 'アップロード準備中...'
       });
 
-      // Check file size - increased to 2GB
       const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
       if (file.size > MAX_FILE_SIZE) {
         throw new Error(`ファイルサイズが大きすぎます（最大${Math.floor(MAX_FILE_SIZE / (1024 * 1024 * 1024))}GB）`);
       }
 
-      // Validate file type
       const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/mp4', 'video/mp4', 'video/webm'];
       if (!validTypes.includes(file.type)) {
         throw new Error('対応していないファイル形式です。MP3、WAV、MP4、WebMファイルのみ対応しています。');
@@ -58,14 +56,11 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         status: 'ファイルをアップロード中...'
       }));
 
-      console.log('Starting upload process...');
       const jobId = await uploadVideo(file);
       
       if (!jobId) {
         throw new Error('アップロードに失敗しました');
       }
-
-      console.log('Upload successful, job ID:', jobId);
 
       // Update progress based on videoUploadProgress
       setUploadProgress(prev => ({
@@ -76,47 +71,34 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
       }));
 
       // Poll for job completion
-      const checkJobStatus = async () => {
-        console.log('Checking job status for ID:', jobId);
-        
-        const { data: job, error: jobError } = await supabase
-          .from('video_jobs')
-          .select('*')
-          .eq('id', jobId)
-          .single();
-
-        if (jobError) {
-          console.error('Error checking job status:', jobError);
-          throw jobError;
-        }
-
-        console.log('Job status:', job.status);
-
-        if (job.status === 'completed') {
-          if (job.output_path) {
-            onTranscriptionComplete(job.output_path);
-            toast({
-              title: "文字起こし完了",
-              description: "音声の文字起こしが完了しました。",
-            });
-          }
-          setIsLoading(false);
-          return true;
-        } else if (job.status === 'failed') {
-          setIsLoading(false);
-          throw new Error(job.error || 'ファイルの処理に失敗しました');
-        }
-
-        return false;
-      };
-
-      // Poll every 5 seconds until the job is complete
       const pollInterval = setInterval(async () => {
         try {
-          const isComplete = await checkJobStatus();
-          if (isComplete) {
-            console.log('Job completed successfully');
+          const { data: job, error: jobError } = await supabase
+            .from('video_jobs')
+            .select('*')
+            .eq('id', jobId)
+            .single();
+
+          if (jobError) {
             clearInterval(pollInterval);
+            setIsLoading(false);
+            throw jobError;
+          }
+
+          if (job.status === 'completed') {
+            clearInterval(pollInterval);
+            if (job.output_path) {
+              onTranscriptionComplete(job.output_path);
+              toast({
+                title: "文字起こし完了",
+                description: "音声の文字起こしが完了しました。",
+              });
+            }
+            setIsLoading(false);
+          } else if (job.status === 'failed') {
+            clearInterval(pollInterval);
+            setIsLoading(false);
+            throw new Error(job.error || 'ファイルの処理に失敗しました');
           }
         } catch (error) {
           console.error('Error in job status polling:', error);
@@ -129,6 +111,12 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
     } catch (error) {
       console.error('Error in handleFileUpload:', error);
       setIsLoading(false);
+      setUploadProgress(prev => ({
+        ...prev,
+        status: 'エラーが発生しました',
+        percentage: 0
+      }));
+      
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'ファイルのアップロード中にエラーが発生しました';

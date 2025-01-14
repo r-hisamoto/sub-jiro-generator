@@ -17,7 +17,7 @@ export const useVideoUpload = () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       console.error('Authentication error: No active session found');
-      throw new Error('Authentication required');
+      throw new Error('認証が必要です');
     }
 
     const userId = session.user.id;
@@ -48,16 +48,16 @@ export const useVideoUpload = () => {
           const uploadPromise = uploadChunk(chunk, chunkPath)
             .then(() => {
               completedChunks++;
-              const progress = Math.min((completedChunks / chunks.length), 1);
-              console.log(`Chunk ${chunkIndex + 1} uploaded successfully. Progress: ${progress * 100}%`);
+              const progress = completedChunks / chunks.length;
+              console.log(`Chunk ${chunkIndex + 1} uploaded successfully. Progress: ${(progress * 100).toFixed(2)}%`);
               setUploadProgress(progress);
               activeUploads.delete(uploadPromise);
             })
             .catch((error) => {
               console.error(`Failed to upload chunk ${chunkIndex}:`, error);
-              console.log('Retrying chunk upload...');
               uploadQueue.unshift(chunk);
               activeUploads.delete(uploadPromise);
+              throw error;
             });
 
           activeUploads.add(uploadPromise);
@@ -68,8 +68,10 @@ export const useVideoUpload = () => {
         }
       }
 
-      console.log('All chunks uploaded successfully. Enqueueing video processing...');
+      console.log('All chunks uploaded successfully');
+      setUploadProgress(1);
 
+      console.log('Enqueueing video processing...');
       const { error: queueError } = await supabase.functions.invoke('enqueue-video-processing', {
         body: {
           jobId,
@@ -90,8 +92,10 @@ export const useVideoUpload = () => {
 
       console.log('Video upload completed successfully');
       return jobId;
+
     } catch (error) {
       console.error('Upload failed:', error);
+      setUploadProgress(0);
       
       if (jobId) {
         console.log('Updating job status to failed...');
