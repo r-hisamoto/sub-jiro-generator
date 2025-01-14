@@ -7,7 +7,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -28,12 +27,12 @@ serve(async (req) => {
 
     console.log(`Processing file: ${file.name}, type: ${file.type}, size: ${file.size}`);
 
-    // Validate file size
-    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    // Check file size - increased to 2GB
+    const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
     if (file.size > MAX_FILE_SIZE) {
       console.error(`File size ${file.size} exceeds maximum allowed size ${MAX_FILE_SIZE}`);
       return new Response(
-        JSON.stringify({ error: 'ファイルサイズが大きすぎます（最大100MB）' }),
+        JSON.stringify({ error: `ファイルサイズが大きすぎます（最大${Math.floor(MAX_FILE_SIZE / (1024 * 1024 * 1024))}GB）` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }

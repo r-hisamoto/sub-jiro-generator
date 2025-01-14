@@ -25,11 +25,7 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
 
   const handleFileUpload = async (file: File) => {
     try {
-      console.log('Starting file upload:', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
-      });
+      console.log('Selected file:', file.name, file.type, file.size);
 
       setIsLoading(true);
       setUploadProgress({
@@ -41,10 +37,10 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         status: 'アップロード準備中...'
       });
 
-      // Check file size
-      const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+      // Check file size - increased to 2GB
+      const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
       if (file.size > MAX_FILE_SIZE) {
-        throw new Error('ファイルサイズが大きすぎます（最大100MB）');
+        throw new Error(`ファイルサイズが大きすぎます（最大${Math.floor(MAX_FILE_SIZE / (1024 * 1024 * 1024))}GB）`);
       }
 
       // Validate file type
@@ -58,14 +54,14 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         status: 'ファイルをアップロード中...'
       }));
 
-      console.log('Uploading file to Supabase storage...');
+      console.log('Starting upload process...');
       const jobId = await uploadVideo(file);
       
       if (!jobId) {
         throw new Error('アップロードに失敗しました');
       }
 
-      console.log('File uploaded successfully, job ID:', jobId);
+      console.log('Upload successful, job ID:', jobId);
 
       // Poll for job completion
       const checkJobStatus = async () => {
@@ -112,12 +108,14 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         } catch (error) {
           console.error('Error in job status polling:', error);
           clearInterval(pollInterval);
+          setIsLoading(false);
           throw error;
         }
       }, 5000);
 
     } catch (error) {
       console.error('Error in handleFileUpload:', error);
+      setIsLoading(false);
       const errorMessage = error instanceof Error 
         ? error.message 
         : 'ファイルのアップロード中にエラーが発生しました';
@@ -127,12 +125,6 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         title: "エラー",
         description: errorMessage,
       });
-    } finally {
-      setIsLoading(false);
-      setUploadProgress(prev => ({
-        ...prev,
-        status: ''
-      }));
     }
   };
 
