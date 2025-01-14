@@ -56,17 +56,22 @@ export const FileProcessor = ({ onTranscriptionComplete }: FileProcessorProps) =
         status: 'ファイルをアップロード中...'
       }));
 
-      const jobId = await uploadVideo(file);
+      const jobId = await uploadVideo(file, (progress) => {
+        setUploadProgress(prev => ({
+          ...prev,
+          bytesUploaded: progress * file.size,
+          percentage: progress * 100,
+          currentChunk: Math.floor(progress * prev.totalChunks),
+          status: `アップロード中... ${Math.floor(progress * 100)}%`
+        }));
+      });
       
       if (!jobId) {
         throw new Error('アップロードに失敗しました');
       }
 
-      // Update progress based on videoUploadProgress
       setUploadProgress(prev => ({
         ...prev,
-        bytesUploaded: videoUploadProgress * file.size,
-        percentage: videoUploadProgress * 100,
         status: 'ファイル処理中...'
       }));
 

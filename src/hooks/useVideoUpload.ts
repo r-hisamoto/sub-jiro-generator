@@ -6,7 +6,7 @@ import { uploadChunk, createVideoJob, divideFileIntoChunks } from "@/utils/uploa
 export const useVideoUpload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const uploadVideo = async (file: File): Promise<string> => {
+  const uploadVideo = async (file: File, onProgress?: (progress: number) => void): Promise<string> => {
     console.log('Starting video upload:', {
       fileName: file.name,
       fileSize: file.size,
@@ -51,6 +51,7 @@ export const useVideoUpload = () => {
               const progress = completedChunks / chunks.length;
               console.log(`Chunk ${chunkIndex + 1} uploaded successfully. Progress: ${(progress * 100).toFixed(2)}%`);
               setUploadProgress(progress);
+              onProgress?.(progress);
               activeUploads.delete(uploadPromise);
             })
             .catch((error) => {
@@ -70,6 +71,7 @@ export const useVideoUpload = () => {
 
       console.log('All chunks uploaded successfully');
       setUploadProgress(1);
+      onProgress?.(1);
 
       console.log('Enqueueing video processing...');
       const { error: queueError } = await supabase.functions.invoke('enqueue-video-processing', {
@@ -96,6 +98,7 @@ export const useVideoUpload = () => {
     } catch (error) {
       console.error('Upload failed:', error);
       setUploadProgress(0);
+      onProgress?.(0);
       
       if (jobId) {
         console.log('Updating job status to failed...');
